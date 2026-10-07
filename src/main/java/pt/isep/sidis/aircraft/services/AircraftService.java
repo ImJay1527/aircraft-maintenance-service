@@ -11,9 +11,11 @@ import java.util.Optional;
 public class AircraftService {
 
     private final AircraftRepository aircraftRepository;
+    private final pt.isep.sidis.aircraft.replication.P2PReplicationClient replicationClient;
 
-    public AircraftService(AircraftRepository aircraftRepository) {
+    public AircraftService(AircraftRepository aircraftRepository, pt.isep.sidis.aircraft.replication.P2PReplicationClient replicationClient) {
         this.aircraftRepository = aircraftRepository;
+        this.replicationClient = replicationClient;
     }
 
     public Aircraft getAircraft(String registrationNumber) {
@@ -23,9 +25,16 @@ public class AircraftService {
             return aircraft.get();
         }
 
-        // TODO: Week 3 - HTTP Forwarding Logic (P2P) will be injected here.
-        // If not found locally, we should query peers before throwing the exception.
-        throw new ResourceNotFoundException("Aircraft not found locally.");
+        // Week 3 - HTTP Forwarding Logic (P2P)
+        // Se a BD local não tem, perguntamos aos peers da rede P2P
+        Optional<Aircraft> remoteAircraft = replicationClient.forwardGetAircraft(registrationNumber);
+        
+        if (remoteAircraft.isPresent()) {
+            return remoteAircraft.get();
+        }
+
+        // Se nem os peers têm, então a aeronave realmente não existe
+        throw new ResourceNotFoundException("Aircraft not found locally or in any reachable peer.");
     }
     
     public Aircraft createAircraft(Aircraft aircraft) {

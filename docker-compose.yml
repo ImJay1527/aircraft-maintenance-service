@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Instância 1
+  aircraft-node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aircraft-node-1
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - PEERS=http://aircraft-node-2:8082,http://aircraft-node-3:8083
+    networks:
+      - aisafe-net
+
+  # Instância 2
+  aircraft-node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aircraft-node-2
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - PEERS=http://aircraft-node-1:8081,http://aircraft-node-3:8083
+    networks:
+      - aisafe-net
+
+  # Instância 3
+  aircraft-node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aircraft-node-3
+    ports:
+      - "8083:8083"
+    environment:
+      - PORT=8083
+      - PEERS=http://aircraft-node-1:8081,http://aircraft-node-2:8082
+    networks:
+      - aisafe-net
+
+networks:
+  aisafe-net:
+    driver: bridge
