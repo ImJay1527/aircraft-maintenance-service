@@ -1,0 +1,255 @@
+{
+  "info": {
+    "name": "Aircraft & Maintenance Service",
+    "_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "description": "Postman test collection for AISafe Aircraft & Maintenance Service conforming to SIDIS contracts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Smoke & Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{instance1}}/actuator/health",
+              "host": ["{{instance1}}"],
+              "path": ["actuator", "health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"App is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "OpenAPI Documentation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{instance1}}/v3/api-docs",
+              "host": ["{{instance1}}"],
+              "path": ["v3", "api-docs"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Service Contract (/internal/aircraft)",
+      "item": [
+        {
+          "name": "Get Available Aircraft (CS-TPA)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/internal/aircraft/CS-TPA",
+              "host": ["{{instance1}}"],
+              "path": ["internal", "aircraft", "CS-TPA"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "var data = pm.response.json();",
+                  "pm.test(\"Matches contract fields\", () => {",
+                  "    pm.expect(data.registrationNumber).to.eql(\"CS-TPA\");",
+                  "    pm.expect(data.status).to.eql(\"AVAILABLE\");",
+                  "    pm.expect(data.modelName).to.eql(\"A320neo\");",
+                  "    pm.expect(data.maxRange).to.eql(6300.0);",
+                  "    pm.expect(data.fuelCapacity).to.eql(24000.0);",
+                  "    pm.expect(data.activeCapacity).to.eql(160);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Aircraft Under Maintenance (CS-TPM)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/internal/aircraft/CS-TPM",
+              "host": ["{{instance1}}"],
+              "path": ["internal", "aircraft", "CS-TPM"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status is UNDER_MAINTENANCE\", () => pm.expect(pm.response.json().status).to.eql(\"UNDER_MAINTENANCE\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown aircraft returns 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/internal/aircraft/CS-XXX",
+              "host": ["{{instance1}}"],
+              "path": ["internal", "aircraft", "CS-XXX"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing service token is 401 or 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{instance1}}/internal/aircraft/CS-TPA",
+              "host": ["{{instance1}}"],
+              "path": ["internal", "aircraft", "CS-TPA"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Unauthorized or Forbidden\", () => pm.expect([401, 403]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Aircraft Management API (/api/aircrafts)",
+      "item": [
+        {
+          "name": "Get aircraft with user token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/api/aircrafts/CS-TPB",
+              "host": ["{{instance1}}"],
+              "path": ["api", "aircrafts", "CS-TPB"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Registration is CS-TPB\", () => pm.expect(pm.response.json().registrationNumber).to.eql(\"CS-TPB\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create new aircraft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationNumber\": \"CS-PM1\",\n  \"model\": {\n    \"id\": 1\n  },\n  \"manufacturingDate\": \"2024-06-01\",\n  \"status\": \"AVAILABLE\"\n}"
+            },
+            "url": {
+              "raw": "{{instance1}}/api/aircrafts",
+              "host": ["{{instance1}}"],
+              "path": ["api", "aircrafts"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Created registration is CS-PM1\", () => pm.expect(pm.response.json().registrationNumber).to.eql(\"CS-PM1\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

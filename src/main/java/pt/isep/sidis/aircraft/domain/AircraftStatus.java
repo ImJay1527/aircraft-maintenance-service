@@ -1,7 +1,9 @@
 package pt.isep.sidis.aircraft.domain;
 
 public enum AircraftStatus {
-    ACTIVE,
+    AVAILABLE,
+    IN_FLIGHT,
+    UNDER_MAINTENANCE,
     INACTIVE,
-    UNDER_MAINTENANCE
+    ACTIVE
 }

@@ -26,14 +26,14 @@ public class AircraftService {
         }
 
         // Week 3 - HTTP Forwarding Logic (P2P)
-        // Se a BD local não tem, perguntamos aos peers da rede P2P
+        // If not found in local database, query P2P network peers
         Optional<Aircraft> remoteAircraft = replicationClient.forwardGetAircraft(registrationNumber);
         
         if (remoteAircraft.isPresent()) {
             return remoteAircraft.get();
         }
 
-        // Se nem os peers têm, então a aeronave realmente não existe
+        // If none of the peers have it, the aircraft does not exist
         throw new ResourceNotFoundException("Aircraft not found locally or in any reachable peer.");
     }
     

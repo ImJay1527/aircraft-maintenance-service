@@ -1,9 +1,6 @@
 package pt.isep.sidis.aircraft.domain;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDate;
 
@@ -13,9 +10,6 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "aircrafts")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Aircraft {
 
     @Id
@@ -33,10 +27,22 @@ public class Aircraft {
     @Column(nullable = false)
     private AircraftStatus status;
 
+    public Aircraft() {
+    }
+
     public Aircraft(String registrationNumber, AircraftModel model, LocalDate manufacturingDate, AircraftStatus status) {
         this.registrationNumber = registrationNumber;
         this.model = model;
         this.manufacturingDate = manufacturingDate;
         this.status = status;
     }
+
+    public String getRegistrationNumber() { return registrationNumber; }
+    public void setRegistrationNumber(String registrationNumber) { this.registrationNumber = registrationNumber; }
+    public AircraftModel getModel() { return model; }
+    public void setModel(AircraftModel model) { this.model = model; }
+    public LocalDate getManufacturingDate() { return manufacturingDate; }
+    public void setManufacturingDate(LocalDate manufacturingDate) { this.manufacturingDate = manufacturingDate; }
+    public AircraftStatus getStatus() { return status; }
+    public void setStatus(AircraftStatus status) { this.status = status; }
 }

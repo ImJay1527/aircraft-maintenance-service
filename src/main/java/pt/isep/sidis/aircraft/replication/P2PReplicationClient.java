@@ -17,9 +17,12 @@ public class P2PReplicationClient {
     
     private final RestTemplate restTemplate;
     private final String[] peers;
+    private final pt.isep.sidis.aircraft.common.security.JwtUtils jwtUtils;
 
-    public P2PReplicationClient(@Value("${aircraft.peers:}") String peersList) {
+    public P2PReplicationClient(@Value("${aircraft.peers:}") String peersList,
+                                pt.isep.sidis.aircraft.common.security.JwtUtils jwtUtils) {
         this.restTemplate = new RestTemplate(); // Built-in Spring HTTP client (avoids external dependencies)
+        this.jwtUtils = jwtUtils;
         if (peersList != null && !peersList.trim().isEmpty()) {
             this.peers = peersList.split(",");
         } else {
@@ -38,15 +41,26 @@ public class P2PReplicationClient {
 
         logger.info("Local Cache Miss for Aircraft {}. Starting P2P Forwarding...", registrationNumber);
 
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        if (jwtUtils != null) {
+            headers.setBearerAuth(jwtUtils.generateServiceToken("aircraft-maintenance-service"));
+        }
+        org.springframework.http.HttpEntity<Void> requestEntity = new org.springframework.http.HttpEntity<>(headers);
+
         for (String peerUrl : peers) {
             String targetUrl = peerUrl + "/api/aircrafts/" + registrationNumber;
             try {
                 logger.info("Forwarding request to peer: {}", targetUrl);
-                // Make HTTP GET to peer
-                Aircraft aircraft = restTemplate.getForObject(targetUrl, Aircraft.class);
-                if (aircraft != null) {
+                // Make HTTP GET to peer with SERVICE token
+                org.springframework.http.ResponseEntity<Aircraft> response = restTemplate.exchange(
+                        targetUrl,
+                        org.springframework.http.HttpMethod.GET,
+                        requestEntity,
+                        Aircraft.class
+                );
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                     logger.info("Aircraft {} found in peer {}", registrationNumber, peerUrl);
-                    return Optional.of(aircraft);
+                    return Optional.of(response.getBody());
                 }
             } catch (HttpClientErrorException.NotFound e) {
                 // Peer doesn't have it either, ignore and try the next one

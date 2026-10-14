@@ -1,0 +1,64 @@
+### Global variables for testing in IntelliJ
+@baseUrl = http://localhost:8081
+@serviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmbGlnaHQtb3BlcmF0aW9ucy1zZXJ2aWNlIiwicm9sZSI6IlNFUlZJQ0UiLCJpYXQiOjE3OTE5NzE3MDksImV4cCI6MjEwNzMzMTcwOX0.nmoac7CrOG6J5m_J5quGzgu2ZkZnMiMkivRXU_F5ypo
+@userToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJtZWNoYW5pYzEiLCJyb2xlIjoiQUlSQ1JBRlRfTUVDSEFOSUMiLCJpYXQiOjE3OTE5NzE3MDksImV4cCI6MjEwNzMzMTcwOX0.tcxw6LEgZgZOraABZcjstYat2gqHqPHP_zywzC6LW1k
+
+### ==============================================================================
+### 1. Actuator & Documentation (Public Endpoints)
+### ==============================================================================
+
+### 1.1 Health Check (Verify if replica is UP)
+GET {{baseUrl}}/actuator/health
+
+### 1.2 OpenAPI Documentation (Swagger JSON)
+GET {{baseUrl}}/v3/api-docs
+
+
+### ==============================================================================
+### 2. Service-to-Service Contract: GET /internal/aircraft/{registration}
+### Called by flight-operations-service to validate and book flights.
+### Requires a token with role SERVICE.
+### ==============================================================================
+
+### 2.1 Query Available Aircraft (CS-TPA - A320neo) -> Should return 200 OK with specs
+GET {{baseUrl}}/internal/aircraft/CS-TPA
+Authorization: Bearer {{serviceToken}}
+
+### 2.2 Query Aircraft Under Maintenance (CS-TPM) -> Returns 200 OK (status: UNDER_MAINTENANCE)
+GET {{baseUrl}}/internal/aircraft/CS-TPM
+Authorization: Bearer {{serviceToken}}
+
+### 2.3 Query Unknown Aircraft (CS-XXX) -> Should return 404 Not Found
+GET {{baseUrl}}/internal/aircraft/CS-XXX
+Authorization: Bearer {{serviceToken}}
+
+### 2.4 Access Denied without Service Token -> Returns 401 Unauthorized or 403 Forbidden
+GET {{baseUrl}}/internal/aircraft/CS-TPA
+
+
+### ==============================================================================
+### 3. Aircraft Management API: /api/aircrafts
+### Used by mechanics and fleet managers
+### ==============================================================================
+
+### 3.1 Query Aircraft with Mechanic Token (CS-TPB - 737 MAX)
+GET {{baseUrl}}/api/aircrafts/CS-TPB
+Authorization: Bearer {{userToken}}
+
+### 3.2 Create New Aircraft (CS-NEW1)
+POST {{baseUrl}}/api/aircrafts
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "registrationNumber": "CS-NEW1",
+  "model": {
+    "id": 1
+  },
+  "manufacturingDate": "2024-05-20",
+  "status": "AVAILABLE"
+}
+
+### 3.3 Query Newly Created Aircraft
+GET {{baseUrl}}/api/aircrafts/CS-NEW1
+Authorization: Bearer {{userToken}}
