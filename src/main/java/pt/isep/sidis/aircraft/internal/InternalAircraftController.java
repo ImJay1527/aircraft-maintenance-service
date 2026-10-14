@@ -36,7 +36,7 @@ public class InternalAircraftController {
                 aircraft.getModel().getName(),
                 aircraft.getModel().getMaximumRange(),
                 aircraft.getModel().getFuelCapacity(),
-                aircraft.getModel().getSeatingCapacity()
+                aircraft.getActiveCapacity() != null ? aircraft.getActiveCapacity() : aircraft.getModel().getSeatingCapacity()
         );
         return ResponseEntity.ok(info);
     }

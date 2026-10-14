@@ -48,6 +48,8 @@ public class AircraftModel {
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public String getModelName() { return name; }
+    public void setModelName(String modelName) { this.name = modelName; }
     public String getManufacturer() { return manufacturer; }
     public void setManufacturer(String manufacturer) { this.manufacturer = manufacturer; }
     public int getSeatingCapacity() { return seatingCapacity; }

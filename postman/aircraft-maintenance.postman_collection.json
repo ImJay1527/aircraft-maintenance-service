@@ -250,6 +250,164 @@
           ]
         }
       ]
+    },
+    {
+      "name": "04 Maintenance Templates (/api/maintenance-templates)",
+      "item": [
+        {
+          "name": "List maintenance templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{techToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/api/maintenance-templates",
+              "host": ["{{instance1}}"],
+              "path": ["api", "maintenance-templates"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "var list = pm.response.json();",
+                  "pm.test(\"Returns template array\", () => pm.expect(Array.isArray(list)).to.be.true);",
+                  "pm.test(\"Contains bootstrapped templates\", () => pm.expect(list.length).to.be.at.least(1));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get template by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supervisorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/api/maintenance-templates/1",
+              "host": ["{{instance1}}"],
+              "path": ["api", "maintenance-templates", "1"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Template has checklist\", () => pm.expect(pm.response.json().checklist.length).to.be.at.least(1));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Maintenance Records & Reports (/api/maintenance-records)",
+      "item": [
+        {
+          "name": "List ongoing maintenance activities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supervisorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/api/maintenance-records/ongoing",
+              "host": ["{{instance1}}"],
+              "path": ["api", "maintenance-records", "ongoing"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "var list = pm.response.json();",
+                  "pm.test(\"Ongoing list is array\", () => pm.expect(Array.isArray(list)).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get total maintenance hours per aircraft",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{atccToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/api/maintenance-records/reports/total-hours",
+              "host": ["{{instance1}}"],
+              "path": ["api", "maintenance-records", "reports", "total-hours"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns array\", () => pm.expect(Array.isArray(pm.response.json())).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get maintenance cost report per aircraft",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{atccToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/api/maintenance-records/reports/cost-per-aircraft",
+              "host": ["{{instance1}}"],
+              "path": ["api", "maintenance-records", "reports", "cost-per-aircraft"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns array\", () => pm.expect(Array.isArray(pm.response.json())).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
