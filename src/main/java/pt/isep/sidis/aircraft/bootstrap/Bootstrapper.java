@@ -35,17 +35,20 @@ public class Bootstrapper implements CommandLineRunner {
     private final MaintenanceTemplateRepository templateRepository;
     private final MaintenanceRecordRepository recordRepository;
     private final MaintenanceRecordService recordService;
+    private final pt.isep.sidis.aircraft.cluster.ClusterConfig clusterConfig;
 
     public Bootstrapper(AircraftModelRepository modelRepository,
                         AircraftRepository aircraftRepository,
                         MaintenanceTemplateRepository templateRepository,
                         MaintenanceRecordRepository recordRepository,
-                        MaintenanceRecordService recordService) {
+                        MaintenanceRecordService recordService,
+                        pt.isep.sidis.aircraft.cluster.ClusterConfig clusterConfig) {
         this.modelRepository = modelRepository;
         this.aircraftRepository = aircraftRepository;
         this.templateRepository = templateRepository;
         this.recordRepository = recordRepository;
         this.recordService = recordService;
+        this.clusterConfig = clusterConfig;
     }
 
     @Override
@@ -122,7 +125,21 @@ public class Bootstrapper implements CommandLineRunner {
             Aircraft m1 = new Aircraft("CS-TPM", a320, LocalDate.of(2020, 5, 12), AircraftStatus.AVAILABLE);
             aircraftRepository.save(m1);
 
-            logger.info("Aircrafts bootstrapped successfully.");
+            // Sharded / partition-specific data to demonstrate P2P forwarding
+            String self = clusterConfig.getSelfName();
+            if (self != null && (self.contains("1") || self.equalsIgnoreCase("default"))) {
+                Aircraft y1 = new Aircraft("CS-TPY", b737, LocalDate.of(2023, 7, 10), AircraftStatus.AVAILABLE);
+                y1.addFlightHours(1800.0);
+                aircraftRepository.save(y1);
+            }
+
+            if (self != null && self.contains("2")) {
+                Aircraft x1 = new Aircraft("CS-TPX", a320, LocalDate.of(2022, 10, 1), AircraftStatus.AVAILABLE);
+                x1.addFlightHours(2500.0);
+                aircraftRepository.save(x1);
+            }
+
+            logger.info("Aircrafts bootstrapped successfully for [{}]", clusterConfig.getSelfName());
         }
     }
 

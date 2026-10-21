@@ -83,6 +83,7 @@
               "script": {
                 "exec": [
                   "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"X-Data-Source is local\", () => pm.expect(pm.response.headers.get(\"X-Data-Source\")).to.eql(\"local\"));",
                   "var data = pm.response.json();",
                   "pm.test(\"Matches contract fields\", () => {",
                   "    pm.expect(data.registrationNumber).to.eql(\"CS-TPA\");",
@@ -149,6 +150,69 @@
               "script": {
                 "exec": [
                   "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Loop Prevention (X-Forwarded-From stops forwarding cycle)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceToken}}"
+              },
+              {
+                "key": "X-Forwarded-From",
+                "value": "instance2"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/internal/aircraft/CS-UNKNOWN",
+              "host": ["{{instance1}}"],
+              "path": ["internal", "aircraft", "CS-UNKNOWN"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Peer Forwarding (CS-TPX on instance2 fetched via instance1)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{instance1}}/internal/aircraft/CS-TPX",
+              "host": ["{{instance1}}"],
+              "path": ["internal", "aircraft", "CS-TPX"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"X-Data-Source is peer\", () => pm.expect(pm.response.headers.get(\"X-Data-Source\")).to.eql(\"peer\"));",
+                  "var data = pm.response.json();",
+                  "pm.test(\"Registration is CS-TPX\", () => pm.expect(data.registrationNumber).to.eql(\"CS-TPX\"));"
                 ],
                 "type": "text/javascript"
               }
