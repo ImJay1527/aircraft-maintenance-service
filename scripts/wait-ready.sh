@@ -31,7 +31,7 @@ wait_for() {
   while true; do
     code=$(probe "$1"); rc=$?
     [[ "$code" == 200 ]] && break
-    if (( rc != 0 && rc != 7 && rc != 28 )); then
+    if (( rc != 0 && rc != 7 && rc != 28 && rc != 52 && rc != 56 )); then
       echo "aircraft-$1: $(head -1 "$ERRF")"
       return 1
     elif (( rc == 0 )) && [[ "$code" != 503 ]]; then
