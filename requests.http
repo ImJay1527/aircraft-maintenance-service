@@ -35,6 +35,15 @@ Authorization: Bearer {{serviceToken}}
 ### 2.4 Access Denied without Service Token -> Returns 401 Unauthorized or 403 Forbidden
 GET {{baseUrl}}/internal/aircraft/CS-TPA
 
+### 2.5 P2P Query Forwarding (CS-TPX partitioned on instance 2, requested via instance 1)
+GET {{baseUrl}}/internal/aircraft/CS-TPX
+Authorization: Bearer {{serviceToken}}
+
+### 2.6 Loop Prevention (X-Forwarded-From stops forwarding loop when aircraft does not exist)
+GET {{baseUrl}}/internal/aircraft/CS-UNKNOWN
+Authorization: Bearer {{serviceToken}}
+X-Forwarded-From: instance2
+
 
 ### ==============================================================================
 ### 3. Aircraft Management API: /api/aircrafts
@@ -62,3 +71,34 @@ Content-Type: application/json
 ### 3.3 Query Newly Created Aircraft
 GET {{baseUrl}}/api/aircrafts/CS-NEW1
 Authorization: Bearer {{userToken}}
+
+
+### ==============================================================================
+### 4. Maintenance Templates API: /api/maintenance-templates
+### ==============================================================================
+
+### 4.1 List All Maintenance Templates
+GET {{baseUrl}}/api/maintenance-templates
+Authorization: Bearer {{userToken}}
+
+### 4.2 Get Maintenance Template by ID
+GET {{baseUrl}}/api/maintenance-templates/1
+Authorization: Bearer {{userToken}}
+
+
+### ==============================================================================
+### 5. Maintenance Records & Reports: /api/maintenance-records
+### ==============================================================================
+
+### 5.1 List Ongoing Maintenance Records
+GET {{baseUrl}}/api/maintenance-records/ongoing
+Authorization: Bearer {{userToken}}
+
+### 5.2 Report: Total Maintenance Hours per Aircraft
+GET {{baseUrl}}/api/maintenance-records/reports/total-hours
+Authorization: Bearer {{userToken}}
+
+### 5.3 Report: Maintenance Cost per Aircraft
+GET {{baseUrl}}/api/maintenance-records/reports/cost-per-aircraft
+Authorization: Bearer {{userToken}}
+

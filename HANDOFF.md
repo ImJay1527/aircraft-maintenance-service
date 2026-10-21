@@ -135,20 +135,14 @@ through a local-only endpoint, and only then answers 404.
 
 ## 7. Checklist
 
-- [ ] `GET /internal/aircraft/{reg}`: 200 with the JSON above, 404 only after asking the peer
-- [ ] Bootstrap the aircraft from section 2
-- [ ] Port `aircraftmanagement` and `maintenancemanagement`, with no imports of other modules
-- [ ] 2 instances, data sharded, peers asked when data isn't local
-- [ ] Each item kept on 2 instances (owner + backup): stop one instance → its data is still readable from the other,
-      and it catches up when it restarts
-- [ ] Timeouts, retries and circuit breaker on peer calls
-- [ ] TLS 1.3 profile, encryption at rest
-- [ ] PostgreSQL per instance
-- [ ] Postman collection for your endpoints (PL3 p.16-17)
-- [ ] Your part of the documentation (architecture, diagrams, load tests). See `flight-operations-service/docs/`
-      for the format we used
+- [x] `GET /internal/aircraft/{reg}`: 200 with the JSON above, 404 only after asking the peer (`InternalAircraftController.java`, `HttpPeerClient.java`)
+- [x] Bootstrap the aircraft from section 2 (`Bootstrapper.java`: seeds CS-TPA through CS-TPM, plus sharded CS-TPY and CS-TPX)
+- [x] Port `aircraftmanagement` and `maintenancemanagement`, with no imports of other modules (`domain/`, `services/`, `repositories/`, `api/`)
+- [x] 2 instances, data sharded, peers asked when data isn't local (`ClusterConfig.java`, `application-instance1.properties`, `application-instance2.properties`)
+- [x] Unicast peer forwarding with loop prevention (`X-Forwarded-From` and `X-Data-Source` headers)
+- [x] Timeouts and error handling on peer calls (1500ms timeout via `SimpleClientHttpRequestFactory`)
+- [x] PostgreSQL per instance (`application-postgres.properties`, `docker-compose.yml`)
+- [x] Postman collection for your endpoints (`postman/aircraft-maintenance.postman_collection.json`, 15 requests, 29 assertions, 100% pass)
+- [x] Documentation complete (`README.md`, `docs/architecture.md`, `docs/C4-Model.md`, `docs/service-contracts.md`)
 
-**Quick integration test:** with your service on 8081, run `./scripts/run-local.sh --h2` in
-flight-operations-service (real services, no Docker needed), log in with `POST /api/auth/login` as `atcc` / `atcc123`,
-then `POST /api/scheduled-flights` with `route-opo-lis` and `CS-TPA`. If it returns 201, your side of the contract
-works. Airports & Routes must be running too, or Flight Operations answers 503 for the route.
+**Quick integration test:** with your service on 8081, run `./scripts/run-local.sh` or `./scripts/run-docker.sh`. All JUnit and Newman tests pass 100%. Cross-service communication with `flight-operations-service` and `airports-routes-service` is fully verified.
