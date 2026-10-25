@@ -24,6 +24,13 @@ if ! docker compose version >/dev/null 2>&1; then
   fi
 fi
 
+if ! docker info >/dev/null 2>&1; then
+  echo "Error: Docker daemon is not running or current user does not have permission to access /var/run/docker.sock."
+  echo "Try running:"
+  echo "  sudo systemctl start docker"
+  exit 1
+fi
+
 if [[ "${1:-}" == "down" ]]; then
   echo "Stopping containers..."
   $COMPOSE_CMD down

@@ -35,6 +35,8 @@ class PeerForwardingTests {
         mockMvc.perform(get("/internal/aircraft/CS-TPA"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Data-Source", "local"))
+                .andExpect(header().string("X-Instance", "instance1"))
+                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.registrationNumber").value("CS-TPA"));
 
         // Verify peer was NOT contacted

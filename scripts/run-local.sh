@@ -8,6 +8,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+if [[ -z "${JAVA_HOME:-}" && -d "/home/andrepm2004/.jdks/corretto-21.0.12.1" ]]; then
+  export JAVA_HOME="/home/andrepm2004/.jdks/corretto-21.0.12.1"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
 N=2
 PROFILE=""
 DB=h2
