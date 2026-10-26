@@ -97,6 +97,63 @@ To maintain observability across distributed asynchronous and synchronous bounda
 
 ---
 
+### 2.6 Communication Protocols: Unicast vs. Multicast & Messaging Styles (Commands vs. Events)
+Following the theoretical curriculum on *Communication Protocols in Distributed Systems* (Prof. Orlando Sousa, Lecture *Understanding Unicast vs. Multicast and Messaging Styles in Modern Distributed Architectures*):
+
+* **Unicast Protocol Selection:**
+  * While multicast and broadcast deliver packets to multiple network recipients simultaneously, they introduce network flood risks, packet duplication, lack of native TCP-level flow control in application layers, and unpredictable delivery semantics in containerized virtual bridges.
+  * `aircraft-maintenance-service` implements **Unicast Point-to-Point HTTP/REST** communication. Unicast enables targeted, deterministic query forwarding directly to configured peer instances (`aircraft.peers`), ensuring that network traffic is strictly proportional to the number of cache misses ($O(1)$ unicast requests rather than $O(N)$ multicast floods).
+* **Messaging Style: Commands (Imperative) vs. Events (Declarative):**
+  * **Commands:** Represent directed instructions to perform a specific action or retrieve specific state with immediate point-to-point request-response semantics (e.g., `GET /internal/aircraft/{reg}`).
+  * **Events:** Represent facts that have already occurred in the domain, broadcast asynchronously to decouple producers from unknown consumers.
+  * In alignment with Assignment 1 project constraints (which focus on synchronous distributed coordination and peer forwarding before introducing message brokers like RabbitMQ in subsequent assignments), the architecture relies exclusively on **Command-driven HTTP/REST interactions**.
+
+---
+
+### 2.7 Data Sharding and Partitioning Taxonomy (Academic Project 1 Specification, Slide 15)
+Effective data distribution across replicas is essential to eliminate bottlenecks, minimize cross-node traffic, and balance storage workloads:
+
+1. **Data-Based Sharding (Operational Identifier):**
+   * Sharding by primary domain identifier: physical aircraft registration number (`registrationNumber`).
+   * Demonstrates peer collaboration: `CS-TPY` is partitioned natively on Instance 1 (`:8081`), while `CS-TPX` is partitioned natively on Instance 2 (`:8091`). When either instance is queried for the non-local registration, the unicast forwarding mechanism resolves the partition transparently.
+2. **Domain-Based Partitioning:**
+   * Strict boundary separation: Aircraft fleet technical specs and maintenance records are isolated within `aircraft-maintenance-service`, completely decoupled from airport runway geometries (`airports-routes-service`) and passenger ticket bookings (`flight-operations-service`).
+3. **Temporal Partitioning:**
+   * Active operational status (`AVAILABLE`, `IN_FLIGHT`, `UNDER_MAINTENANCE`) and ongoing maintenance work orders are maintained on high-performance operational tables, separated logically from completed historical maintenance logs and archived turnaround analytics.
+4. **Geographic / Operational Sharding:**
+   * Fleet maintenance instances can be deployed close to major maintenance hubs (e.g., Lisbon or Porto hangar facilities), maintaining local data sovereignty and reducing WAN access latency for ground crew technicians.
+
+---
+
+### 2.8 Data Consistency & Eventual Convergence Lifecycle (P1 Specification, Slide 11)
+In distributed systems, enforcing immediate linearizable consistency across all replicas under write operations requires distributed locks or Two-Phase Commit (2PC), severely impairing availability and response time. The service adopts an **Eventual Consistency Lifecycle**:
+
+```
+[1. Write Operation]  -->  [2. Propagation Initiated]  -->  [3. Network Delays]  -->  [4. Eventual Convergence]
+Client updates status       Replica synchronizes           Varying latency across       Replicas reach identical
+on Replica A (e.g.          state with peer nodes          network partitions           consistent state
+UNDER_MAINTENANCE)
+```
+
+* **Step 1 (Write Operation):** An authorized technician starts a maintenance check on Instance 1 (`POST /api/maintenance-records/{id}/start`). The status of aircraft `CS-TPM` updates immediately to `UNDER_MAINTENANCE` in Instance 1's database.
+* **Step 2 & 3 (Propagation & Delays):** Due to network partitions or scheduling delays, peer instances may temporarily hold the prior state.
+* **Step 4 (Eventual Convergence):** Periodic health checks, cache expirations, or peer synchronization converge all nodes to the consistent airworthiness state.
+* **Aviation Domain Acceptability:** For non-instantaneous ground operations (such as multi-hour scheduled C-Checks or cabin retrofits), temporary eventual consistency is acceptable and prevents fleet management deadlocks.
+
+---
+
+### 2.9 Fault Tolerance & Failure Recovery Taxonomy (P1 Slide 14 & PL3 Slide 14)
+The service implements a multi-layered fault tolerance framework based on the **Crash-Stop** and **Crash-Recovery** failure models:
+
+1. **Circuit Breaker & Bounded Timeouts:**
+   * When a peer replica becomes unresponsive, `HttpPeerClient` terminates the TCP connection after `1500 ms` (`aircraft.peer-timeout-ms`). This prevents thread pool starvation (Tomcat worker thread exhaustion) and protects the calling instance from cascading latency spikes.
+2. **Health Check Probes (Failure Detectors):**
+   * Exposes Spring Boot Actuator `/actuator/health` probes. Infrastructure orchestrators (Docker Compose, Kubernetes) continuously monitor container liveness and readiness, automatically isolating failing instances.
+3. **Graceful Degradation:**
+   * If peer replicas are unreachable during a query miss, the service degrades gracefully: instead of throwing a generic `500 Internal Server Error`, it logs a structured warning and returns `404 Not Found` with `X-Data-Source: local`, allowing calling services (e.g., `flight-operations-service`) to execute their compensating Saga workflows.
+
+---
+
 ## 3. Architectural Drivers: FURPS+ & ISO/IEC 25010 Quality Model
 
 | Quality Category | ISO 25010 Characteristic | Architectural Implementation & Quality Driver |
@@ -587,6 +644,16 @@ $$\text{Latency}_{\text{Total}} = \text{Latency}_{\text{Network}} + \text{Latenc
   * Network hops: 1 inter-instance HTTP call + serialization.
   * Measured response time on container bridge: **~5-8 ms**.
   * Expected response time in cross-region WAN: **~50-150 ms** (confirming Deutsch's Fallacy #2: *Latency is not zero*).
+
+### Theoretical Benchmark vs. Empirical Measurements (LETI-SIDIS-PL3, Slide 21)
+
+In the practical session notes (*LETI-SIDIS-PL3: Performance Considerations*, Slide 21), Prof. Orlando Sousa establishes reference thresholds for distributed systems evaluation:
+
+| Metric / Scenario | PL3 Reference Baseline (Slide 21) | Measured Container Cluster | Analysis & Theoretical Validation |
+| :--- | :--- | :--- | :--- |
+| **Local Response Time** | `~50 ms` | **`2.5 ms`** | Direct database memory/indexed access without network transmission overhead. In local loopback/bridge, network overhead is sub-millisecond. |
+| **Forwarded Response Time** | `~200 ms` | **`5.8 ms`** | Incurs 1 inter-instance network hop, TCP socket negotiation, JSON serialization, and peer database lookup. Confirms that forwarded queries take ~2x the time of local queries. In real cross-datacenter WAN, network RTT dominates (~50–200 ms). |
+| **Cluster Target Availability** | `99.9%` | **`100%` during normal ops** | With active multi-instance cloning (`aircraft-1`, `aircraft-2`) and health-aware circuit breaking, single node failure leaves the cluster available. |
 
 ---
 

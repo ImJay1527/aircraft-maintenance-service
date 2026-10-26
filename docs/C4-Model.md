@@ -34,6 +34,55 @@ flowchart TB
 
 ---
 
+## UML Logical View Level 1 (Deployment-Independent Component Model)
+
+Following the formal specification in *Testing Component Collaboration, Cloning, UML Logical View Level 1* (Prof. Orlando Sousa, Week 4 Practical Session, Slides 14–15):
+
+* **Components (`<<component>>`):** Captures high-level service boundaries and functional autonomy regardless of physical deployment.
+* **Instances (`<<instance>>`):** Visualizes redundancy and active cloning (`aircraft-1`, `aircraft-2`) to eliminate single points of failure.
+* **Interfaces & Endpoints:** Explicitly represents provided interfaces (Lollipop / REST endpoints) and required interfaces (Socket / REST client dependencies).
+* **Dependencies:** Directed dependencies illustrating inter-service collaboration and unicast peer forwarding.
+
+```mermaid
+%% UML Logical View Level 1 (Deployment-Independent Structural Model)
+flowchart LR
+    classDef comp fill:#1e40af,stroke:#1e3a8a,color:#fff;
+    classDef inst fill:#3b82f6,stroke:#1d4ed8,color:#fff;
+    classDef iface fill:#10b981,stroke:#047857,color:#fff;
+
+    subgraph AM_Comp["<<component>> Aircraft & Maintenance Service"]
+        direction TB
+        subgraph AM_Clones["<<instance>> Active Clones (Redundancy)"]
+            amInst1["<<instance>> aircraft-1"]:::inst
+            amInst2["<<instance>> aircraft-2"]:::inst
+            amInst1 <-->|"P2P Unicast Forwarding<br/>HTTP/REST (SERVICE JWT)"| amInst2
+        end
+
+        iInternal["<<interface>> /internal/aircraft/{reg}<br/>Role: SERVICE"]:::iface
+        iPublic["<<interface>> /api/aircrafts/**<br/>/api/maintenance-*<br/>Roles: MECHANIC, TECH, ADMIN"]:::iface
+
+        AM_Clones --- iInternal
+        AM_Clones --- iPublic
+    end
+
+    subgraph FO_Comp["<<component>> Flight Operations Service"]
+        foInst["<<instance>> flightops-1"]:::comp
+    end
+
+    subgraph AR_Comp["<<component>> Airports & Routes Service"]
+        arInst["<<instance>> airports-1"]:::comp
+    end
+
+    foInst -.->|"Required Interface: Airworthiness Query<br/>HTTP GET /internal/aircraft/{reg}"| iInternal
+    foInst -.->|"Required Interface: Route Query<br/>HTTP GET /internal/routes/{id}"| arInst
+
+    class AM_Comp comp;
+    class FO_Comp comp;
+    class AR_Comp comp;
+```
+
+---
+
 ## Level 2: Container Diagram (Domain-Driven Segregation)
 
 Illustrates the decomposition of the original PSOFT monolith into three autonomous, domain-aligned microservices, highlighting active component cloning and isolated databases.
