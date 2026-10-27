@@ -26,6 +26,11 @@ import java.util.List;
  * allowing flight-operations-service, maintenance flows, and Postman test collections to validate real operations.
  */
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "aircraft.bootstrap.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class Bootstrapper implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(Bootstrapper.class);
@@ -75,10 +80,13 @@ public class Bootstrapper implements CommandLineRunner {
         if (aircraftRepository.count() == 0) {
             logger.info("Bootstrapping Aircrafts from service contract...");
 
-            AircraftModel a320 = modelRepository.findByName("A320neo").orElseThrow();
-            AircraftModel b737 = modelRepository.findByName("737 MAX").orElseThrow();
-            AircraftModel b777 = modelRepository.findByName("777X").orElseThrow();
-            AircraftModel a350 = modelRepository.findByName("A350").orElseThrow();
+            var optA320 = modelRepository.findByName("A320neo");
+            if (optA320.isEmpty()) return;
+            AircraftModel a320 = optA320.get();
+            AircraftModel b737 = modelRepository.findByName("737 MAX").orElse(null);
+            AircraftModel b777 = modelRepository.findByName("777X").orElse(null);
+            AircraftModel a350 = modelRepository.findByName("A350").orElse(null);
+            if (b737 == null || b777 == null || a350 == null) return;
 
             // A320neo Available
             Aircraft a1 = new Aircraft("CS-TPA", a320, LocalDate.of(2024, 1, 15), AircraftStatus.AVAILABLE);
@@ -211,18 +219,24 @@ public class Bootstrapper implements CommandLineRunner {
     private void bootstrapMaintenanceRecords() {
         if (recordRepository.count() == 0) {
             logger.info("Bootstrapping Maintenance Records...");
-            Long aCheckId = templateRepository.findByTemplateName("A-Check Routine Inspection").orElseThrow().getId();
-            Long cCheckId = templateRepository.findByTemplateName("C-Check Scheduled Maintenance").orElseThrow().getId();
+            var optACheck = templateRepository.findByTemplateName("A-Check Routine Inspection");
+            var optCCheck = templateRepository.findByTemplateName("C-Check Scheduled Maintenance");
+            if (optACheck.isEmpty() || optCCheck.isEmpty()) return;
+            Long aCheckId = optACheck.get().getId();
+            Long cCheckId = optCCheck.get().getId();
 
             // Completed maintenance record on CS-TPC
             var rec1 = recordService.createRecord("CS-TPC", aCheckId, "Routine A-Check before flight rotation",
                     LocalDate.now().minusDays(30), null, MaintenanceComponent.AIRFRAME, 1200.0);
+            if (rec1 == null) return;
             rec1 = recordService.startRecord(rec1.getId(), rec1.getVersion());
+            if (rec1 == null) return;
             recordService.completeRecord(rec1.getId(), rec1.getVersion(), "All inspection items passed.", 7.5, 1150.0);
 
             // In-progress maintenance record on CS-TPM -> transitions CS-TPM to UNDER_MAINTENANCE
             var rec2 = recordService.createRecord("CS-TPM", cCheckId, "Scheduled C-Check in progress",
                     LocalDate.now().minusDays(2), null, MaintenanceComponent.AIRFRAME, 8500.0);
+            if (rec2 == null) return;
             recordService.startRecord(rec2.getId(), rec2.getVersion());
 
             logger.info("Maintenance Records bootstrapped successfully.");
