@@ -43,6 +43,16 @@ class AircraftMaintenanceApplicationTests {
     @Autowired
     private pt.isep.sidis.aircraft.repositories.AircraftModelRepository modelRepository;
 
+    @Autowired
+    private pt.isep.sidis.aircraft.bootstrap.Bootstrapper bootstrapper;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        if (modelRepository.count() == 0) {
+            bootstrapper.run();
+        }
+    }
+
     @Test
     void authenticatedUserCanCreateAndGetAircraft() throws Exception {
         String token = jwtUtils.generateToken("mechanic1", "AIRCRAFT_MECHANIC");

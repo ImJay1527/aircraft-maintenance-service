@@ -51,11 +51,22 @@ class MaintenanceIntegrationTests {
     @Autowired
     private MaintenanceTemplateRepository templateRepository;
 
+    @Autowired
+    private pt.isep.sidis.aircraft.bootstrap.Bootstrapper bootstrapper;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        if (modelRepository.count() == 0) {
+            bootstrapper.run();
+        }
+    }
+
     @Test
     void technicianCanCreateAndQueryMaintenanceTemplate() throws Exception {
         String techToken = jwtUtils.generateToken("tech1", "MAINTENANCE_TECHNICIAN");
 
-        AircraftModel model = modelRepository.findByName("A320neo").orElseThrow();
+        AircraftModel model = modelRepository.findByName("A320neo").orElseGet(() ->
+                modelRepository.save(new AircraftModel("A320neo", "Airbus", 160, 24000, 6300, 828)));
 
         CreateMaintenanceTemplateDTO dto = new CreateMaintenanceTemplateDTO(
                 "Custom Hydraulic Inspection",
@@ -85,10 +96,18 @@ class MaintenanceIntegrationTests {
     void maintenanceRecordLifecycleRestoresAircraftToAvailable() throws Exception {
         String techToken = jwtUtils.generateToken("tech1", "MAINTENANCE_TECHNICIAN");
 
-        AircraftModel a320 = modelRepository.findByName("A320neo").orElseThrow();
+        AircraftModel a320 = modelRepository.findByName("A320neo").orElseGet(() ->
+                modelRepository.save(new AircraftModel("A320neo", "Airbus", 160, 24000, 6300, 828)));
         Aircraft testAircraft = aircraftRepository.save(new Aircraft("CS-TTEST", a320, LocalDate.of(2022, 1, 1), AircraftStatus.AVAILABLE));
 
-        var template = templateRepository.findAll().stream().findFirst().orElseThrow();
+        var template = templateRepository.findAll().stream().findFirst().orElseGet(() ->
+                templateRepository.save(new pt.isep.sidis.aircraft.domain.MaintenanceTemplate(
+                        "A-Check Routine Inspection",
+                        pt.isep.sidis.aircraft.domain.TemplateType.INSPECTION,
+                        8.0,
+                        List.of(a320),
+                        List.of("Check tyres", "Inspect cabin")
+                )));
 
         CreateMaintenanceRecordDTO createDTO = new CreateMaintenanceRecordDTO(
                 testAircraft.getRegistrationNumber(),

@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = {"aircraft.db.name=template_controller_test", "aircraft.bootstrap.enabled=false"})
 @AutoConfigureMockMvc
 class MaintenanceTemplateControllerTest {
 

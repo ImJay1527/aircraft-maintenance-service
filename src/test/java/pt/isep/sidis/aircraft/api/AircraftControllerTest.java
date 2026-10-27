@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = "aircraft.bootstrap.enabled=false")
+@SpringBootTest(properties = {"aircraft.db.name=aircraft_controller_test", "aircraft.bootstrap.enabled=false"})
 @AutoConfigureMockMvc
 class AircraftControllerTest {
 
