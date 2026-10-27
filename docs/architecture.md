@@ -683,8 +683,14 @@ user=flight-operations-service roles=[ROLE_SERVICE] method=GET uri=/internal/air
 
 The architecture has been empirically validated against 3 complementary verification suites:
 
-1. **JUnit 5 & MockMvc Automated Suite (14/14 Pass):**
-   * Validates local repository queries, unicast peer client invocation, loop cutting (`X-Forwarded-From`), and response header injection (`X-Data-Source`, `X-Instance`, `X-Request-Id`).
+1. **JUnit 5, Mockito & MockMvc Automated Suite (132/132 Pass with 0 Failures):**
+   * **Domain Layer (34 tests):** Invariant protection, model compatibility, deep checklist cloning, status transitions, and lifecycle state machines.
+   * **Service Layer (31 tests):** Isolated business logic, optimistic locking conflict detection (`409 Conflict`), and analytics aggregations.
+   * **REST Controller Layer (25 tests):** HTTP status codes, DTO validation, and error payload compliance.
+   * **Security & RBAC Matrix (14 tests):** Role-based authorization across `ROLE_SERVICE`, `MAINTENANCE_TECHNICIAN`, `MAINTENANCE_SUPERVISOR`, `ATCC`, `ADMIN`, anonymous 401s, forged tokens, and tracing header propagation.
+   * **Replication & P2P Client (9 tests):** Resilient HTTP peer queries, timeouts, connection refused handling, and multi-peer failover.
+   * **Distributed Multi-Instance Cluster E2E (9 tests - `TwoInstancesIntegrationTest`):** Launches 2 real Spring Boot processes on dynamic ports (`ServerSocket(0)`), each with an isolated in-memory DB (`cluster_db_1` and `cluster_db_2`). Validates local hits, bidirectional cross-instance forwarding, loop prevention (`X-Forwarded-From`), distributed tracing (`X-Request-Id`), and zero-downtime node crash resilience.
+   * **Integration & Bootstrapping (10 tests):** End-to-end work order lifecycle and service contract conformance.
 2. **Newman / Postman Integration Collection (15/15 Requests, 29/29 Assertions Pass):**
    * Validates live endpoints on active cluster instances (`8081` and `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, and maintenance cost aggregation.
 3. **Automated Live Cluster Demonstration (`scripts/demo-cluster.sh`):**
