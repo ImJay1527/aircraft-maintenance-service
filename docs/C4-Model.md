@@ -55,7 +55,10 @@ flowchart LR
         subgraph AM_Clones["<<instance>> Active Clones (Redundancy)"]
             amInst1["<<instance>> aircraft-1"]:::inst
             amInst2["<<instance>> aircraft-2"]:::inst
-            amInst1 <-->|"P2P Unicast Forwarding<br/>HTTP/REST (SERVICE JWT)"| amInst2
+            amInst3["<<instance>> aircraft-3"]:::inst
+            amInst1 <-->|"P2P Forwarding"| amInst2
+            amInst2 <-->|"P2P Forwarding"| amInst3
+            amInst1 <-->|"P2P Forwarding"| amInst3
         end
 
         iInternal["<<interface>> /internal/aircraft/{reg}<br/>Role: SERVICE"]:::iface
@@ -100,11 +103,16 @@ flowchart TB
         subgraph AM_Cluster["aircraft-maintenance-service (This Component)"]
             am1["aircraft-1<br/>[Container: Spring Boot 3]<br/>Port :8081"]:::container
             am2["aircraft-2<br/>[Container: Spring Boot 3]<br/>Port :8091"]:::container
+            am3["aircraft-3<br/>[Container: Spring Boot 3]<br/>Port :8101"]:::container
             db_am1[("aircraft-db-1<br/>[PostgreSQL 16 / H2]<br/>Port :5431")]:::db
             db_am2[("aircraft-db-2<br/>[PostgreSQL 16 / H2]<br/>Port :5434")]:::db
+            db_am3[("aircraft-db-3<br/>[PostgreSQL 16 / H2]<br/>Port :5437")]:::db
             am1 --- db_am1
             am2 --- db_am2
-            am1 <-->|"P2P Unicast Forwarding<br/>GET /internal/aircraft/{reg}<br/>(SERVICE JWT, X-Forwarded-From)"| am2
+            am3 --- db_am3
+            am1 <-->|"P2P Forwarding<br/>(SERVICE JWT, X-Forwarded-From)"| am2
+            am2 <-->|"P2P Forwarding"| am3
+            am1 <-->|"P2P Forwarding"| am3
         end
 
         subgraph FO_Cluster["flight-operations-service"]
@@ -227,31 +235,39 @@ flowchart TB
 
     subgraph DockerHost["Docker Host Environment (Linux Bridge 172.20.0.0/16)"]
         subgraph AppCluster["Application Tier (Eclipse Temurin 21)"]
-            inst1["Container: aircraft-1<br/>Port in container: 8081<br/>Exposed Host Port: 8081:8081<br/>Active Profiles: instance1,postgres"]:::app
-            inst2["Container: aircraft-2<br/>Port in container: 8081<br/>Exposed Host Port: 8091:8081<br/>Active Profiles: instance2,postgres"]:::app
+            inst1["Container: aircraft-1<br/>Port: 8081<br/>Exposed: 8081:8081<br/>Profile: instance1,postgres"]:::app
+            inst2["Container: aircraft-2<br/>Port: 8081<br/>Exposed: 8091:8081<br/>Profile: instance2,postgres"]:::app
+            inst3["Container: aircraft-3<br/>Port: 8081<br/>Exposed: 8101:8081<br/>Profile: instance3,postgres"]:::app
         end
 
         subgraph DBCluster["Persistence Tier (PostgreSQL 16 Alpine)"]
-            db1[("Container: aircraft-db-1<br/>Port in container: 5432<br/>Exposed Host Port: 5431:5432<br/>Healthcheck: pg_isready")]:::db
-            db2[("Container: aircraft-db-2<br/>Port in container: 5432<br/>Exposed Host Port: 5434:5432<br/>Healthcheck: pg_isready")]:::db
+            db1[("Container: aircraft-db-1<br/>Port: 5432<br/>Exposed: 5431:5432<br/>Healthcheck: pg_isready")]:::db
+            db2[("Container: aircraft-db-2<br/>Port: 5432<br/>Exposed: 5434:5432<br/>Healthcheck: pg_isready")]:::db
+            db3[("Container: aircraft-db-3<br/>Port: 5432<br/>Exposed: 5437:5432<br/>Healthcheck: pg_isready")]:::db
         end
 
         subgraph VolumeTier["Persistent Named Volumes"]
             v1[("Volume: aircraft-db-1-data<br/>Mount: /var/lib/postgresql/data")]:::vol
             v2[("Volume: aircraft-db-2-data<br/>Mount: /var/lib/postgresql/data")]:::vol
+            v3[("Volume: aircraft-db-3-data<br/>Mount: /var/lib/postgresql/data")]:::vol
         end
     end
 
     clientNode -->|"HTTP GET :8081"| inst1
     clientNode -->|"HTTP GET :8091"| inst2
+    clientNode -->|"HTTP GET :8101"| inst3
 
-    inst1 <-->|"P2P Unicast Forwarding<br/>http://aircraft-2:8081<br/>(X-Forwarded-From, SERVICE JWT)"| inst2
+    inst1 <-->|"P2P Forwarding"| inst2
+    inst2 <-->|"P2P Forwarding"| inst3
+    inst1 <-->|"P2P Forwarding"| inst3
 
     inst1 -->|"JDBC: postgresql://aircraft-db-1:5432/aircraft"| db1
     inst2 -->|"JDBC: postgresql://aircraft-db-2:5432/aircraft"| db2
+    inst3 -->|"JDBC: postgresql://aircraft-db-3:5432/aircraft"| db3
 
     db1 --- v1
     db2 --- v2
+    db3 --- v3
 ```
 
 ---

@@ -249,11 +249,16 @@ flowchart LR
         direction TB
         am1["aircraft-1<br/>Port :8081"]:::am
         am2["aircraft-2<br/>Port :8091"]:::am
+        am3["aircraft-3<br/>Port :8101"]:::am
         db1[("aircraft-db-1<br/>Port :5431 / H2")]:::db
         db2[("aircraft-db-2<br/>Port :5434 / H2")]:::db
+        db3[("aircraft-db-3<br/>Port :5437 / H2")]:::db
         am1 --- db1
         am2 --- db2
+        am3 --- db3
         am1 <-->|"P2P Unicast Forwarding<br/>GET /internal/aircraft/{reg}<br/>(X-Forwarded-From, SERVICE JWT)"| am2
+        am2 <-->|"P2P Unicast Forwarding"| am3
+        am1 <-->|"P2P Unicast Forwarding"| am3
     end
 
     subgraph FO["flight-operations-service"]
@@ -268,7 +273,7 @@ flowchart LR
         ar2["airports-2 :8092"]:::peer
     end
 
-    client -->|"HTTP/REST + User JWT<br/>(/api/aircrafts, /api/maintenance-*) :8081/:8091"| AM
+    client -->|"HTTP/REST + User JWT<br/>(/api/aircrafts, /api/maintenance-*) :8081/:8091/:8101"| AM
     fo1 -->|"Inter-Service Airworthiness Query<br/>GET /internal/aircraft/{reg} (SERVICE JWT)"| am1
     fo2 -->|"Inter-Service Airworthiness Query<br/>GET /internal/aircraft/{reg} (SERVICE JWT)"| am2
     fo1 -->|"Inter-Service Route Query<br/>GET /internal/routes/{id}"| AR
@@ -512,30 +517,38 @@ flowchart TB
             subgraph AppTier["Application Tier (Stateless Clones)"]
                 am1["Container: aircraft-1<br/>IP: 172.20.0.10<br/>Host Port: 8081:8081<br/>Profile: instance1,postgres<br/>Healthcheck: GET /actuator/health"]:::app
                 am2["Container: aircraft-2<br/>IP: 172.20.0.11<br/>Host Port: 8091:8081<br/>Profile: instance2,postgres<br/>Healthcheck: GET /actuator/health"]:::app
+                am3["Container: aircraft-3<br/>IP: 172.20.0.12<br/>Host Port: 8101:8081<br/>Profile: instance3,postgres<br/>Healthcheck: GET /actuator/health"]:::app
             end
 
             subgraph DatabaseTier["Database Tier (PostgreSQL 16 Alpine)"]
                 db1[("Container: aircraft-db-1<br/>IP: 172.20.0.20<br/>Host Port: 5431:5432<br/>Healthcheck: pg_isready")]:::db
                 db2[("Container: aircraft-db-2<br/>IP: 172.20.0.21<br/>Host Port: 5434:5432<br/>Healthcheck: pg_isready")]:::db
+                db3[("Container: aircraft-db-3<br/>IP: 172.20.0.22<br/>Host Port: 5437:5432<br/>Healthcheck: pg_isready")]:::db
             end
 
             subgraph Volumes["Docker Named Volumes (Persistent Storage)"]
                 vol1[("Volume: aircraft-db-1-data<br/>Mount: /var/lib/postgresql/data")]:::vol
                 vol2[("Volume: aircraft-db-2-data<br/>Mount: /var/lib/postgresql/data")]:::vol
+                vol3[("Volume: aircraft-db-3-data<br/>Mount: /var/lib/postgresql/data")]:::vol
             end
         end
     end
 
     extClient -->|"HTTP GET :8081"| am1
     extClient -->|"HTTP GET :8091"| am2
+    extClient -->|"HTTP GET :8101"| am3
 
-    am1 <-->|"P2P Unicast Forwarding<br/>http://aircraft-2:8081<br/>X-Forwarded-From / SERVICE JWT"| am2
+    am1 <-->|"P2P Forwarding<br/>SERVICE JWT / X-Forwarded-From"| am2
+    am2 <-->|"P2P Forwarding"| am3
+    am1 <-->|"P2P Forwarding"| am3
 
-    am1 -->|"JDBC: postgresql://aircraft-db-1:5432/aircraft<br/>HikariCP Pool"| db1
-    am2 -->|"JDBC: postgresql://aircraft-db-2:5432/aircraft<br/>HikariCP Pool"| db2
+    am1 -->|"JDBC: postgresql://aircraft-db-1:5432/aircraft"| db1
+    am2 -->|"JDBC: postgresql://aircraft-db-2:5432/aircraft"| db2
+    am3 -->|"JDBC: postgresql://aircraft-db-3:5432/aircraft"| db3
 
     db1 --- vol1
     db2 --- vol2
+    db3 --- vol3
 ```
 
 ---
