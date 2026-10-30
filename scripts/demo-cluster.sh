@@ -25,8 +25,15 @@ RED="\033[1;31m"
 MAGENTA="\033[1;35m"
 RESET="\033[0m"
 
-INST1="http://localhost:8081"
-INST2="http://localhost:8091"
+SCHEME="http"
+CURL_INSECURE=""
+if [[ "${1:-}" == "--tls" ]]; then
+  SCHEME="https"
+  CURL_INSECURE="-k"
+fi
+
+INST1="$SCHEME://localhost:8081"
+INST2="$SCHEME://localhost:8091"
 
 # Long-lived pre-generated tokens matching application JWT secret
 SERVICE_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmbGlnaHQtb3BlcmF0aW9ucy1zZXJ2aWNlIiwicm9sZSI6IlNFUlZJQ0UiLCJpYXQiOjE3OTE5NzE3MDksImV4cCI6MjEwNzMzMTcwOX0.nmoac7CrOG6J5m_J5quGzgu2ZkZnMiMkivRXU_F5ypo"
@@ -42,8 +49,8 @@ echo -e "${RESET}"
 
 # 0. Check cluster connectivity
 echo -e "${YELLOW}>> 0. Checking cluster connectivity...${RESET}"
-H1=$(curl -s -o /dev/null -w "%{http_code}" "$INST1/actuator/health" 2>/dev/null || echo "DOWN")
-H2=$(curl -s -o /dev/null -w "%{http_code}" "$INST2/actuator/health" 2>/dev/null || echo "DOWN")
+H1=$(curl -s $CURL_INSECURE -o /dev/null -w "%{http_code}" "$INST1/actuator/health" 2>/dev/null || echo "DOWN")
+H2=$(curl -s $CURL_INSECURE -o /dev/null -w "%{http_code}" "$INST2/actuator/health" 2>/dev/null || echo "DOWN")
 
 if [[ "$H1" != "200" || "$H2" != "200" ]]; then
   echo -e "${RED}[ERROR] Both instances must be running to execute the live demonstration.${RESET}"
@@ -64,7 +71,7 @@ echo
 # 1. Local Hit
 echo -e "${YELLOW}>> 1. Local Cache Hit (CS-TPA on Instance 1)${RESET}"
 echo -e "  Calling: ${BOLD}GET $INST1/internal/aircraft/CS-TPA${RESET}"
-RESP=$(curl -s -i "$INST1/internal/aircraft/CS-TPA" -H "Authorization: Bearer $SERVICE_TOKEN")
+RESP=$(curl -s $CURL_INSECURE -i "$INST1/internal/aircraft/CS-TPA" -H "Authorization: Bearer $SERVICE_TOKEN")
 STATUS=$(echo "$RESP" | grep -i "^HTTP" | awk '{print $2}')
 SOURCE=$(echo "$RESP" | grep -i "^X-Data-Source:" | tr -d '\r' | awk '{print $2}')
 INST_HDR=$(echo "$RESP" | grep -i "^X-Instance:" | tr -d '\r' | awk '{print $2}')
@@ -77,7 +84,7 @@ echo
 # 2. P2P Forwarding: Inst1 -> Inst2
 echo -e "${YELLOW}>> 2. P2P Unicast Query Forwarding (CS-TPX partitioned on Inst2 requested from Inst1)${RESET}"
 echo -e "  Calling: ${BOLD}GET $INST1/internal/aircraft/CS-TPX${RESET}"
-RESP=$(curl -s -i "$INST1/internal/aircraft/CS-TPX" -H "Authorization: Bearer $SERVICE_TOKEN")
+RESP=$(curl -s $CURL_INSECURE -i "$INST1/internal/aircraft/CS-TPX" -H "Authorization: Bearer $SERVICE_TOKEN")
 STATUS=$(echo "$RESP" | grep -i "^HTTP" | awk '{print $2}')
 SOURCE=$(echo "$RESP" | grep -i "^X-Data-Source:" | tr -d '\r' | awk '{print $2}')
 INST_HDR=$(echo "$RESP" | grep -i "^X-Instance:" | tr -d '\r' | awk '{print $2}')
@@ -90,7 +97,7 @@ echo
 # 3. Reverse P2P Forwarding: Inst2 -> Inst1
 echo -e "${YELLOW}>> 3. Reverse P2P Query Forwarding (CS-TPY partitioned on Inst1 requested from Inst2)${RESET}"
 echo -e "  Calling: ${BOLD}GET $INST2/internal/aircraft/CS-TPY${RESET}"
-RESP=$(curl -s -i "$INST2/internal/aircraft/CS-TPY" -H "Authorization: Bearer $SERVICE_TOKEN")
+RESP=$(curl -s $CURL_INSECURE -i "$INST2/internal/aircraft/CS-TPY" -H "Authorization: Bearer $SERVICE_TOKEN")
 STATUS=$(echo "$RESP" | grep -i "^HTTP" | awk '{print $2}')
 SOURCE=$(echo "$RESP" | grep -i "^X-Data-Source:" | tr -d '\r' | awk '{print $2}')
 INST_HDR=$(echo "$RESP" | grep -i "^X-Instance:" | tr -d '\r' | awk '{print $2}')
@@ -104,7 +111,7 @@ echo
 echo -e "${YELLOW}>> 4. Distributed Loop Prevention (X-Forwarded-From stops circular storm)${RESET}"
 echo -e "  Simulating incoming query with: ${BOLD}X-Forwarded-From: instance2${RESET} for nonexistent aircraft 'CS-UNKNOWN'"
 echo -e "  Calling: ${BOLD}GET $INST1/internal/aircraft/CS-UNKNOWN${RESET}"
-RESP=$(curl -s -i "$INST1/internal/aircraft/CS-UNKNOWN" \
+RESP=$(curl -s $CURL_INSECURE -i "$INST1/internal/aircraft/CS-UNKNOWN" \
   -H "Authorization: Bearer $SERVICE_TOKEN" \
   -H "X-Forwarded-From: instance2")
 STATUS=$(echo "$RESP" | grep -i "^HTTP" | awk '{print $2}')
@@ -119,18 +126,18 @@ echo
 # 5. Security Boundary
 echo -e "${YELLOW}>> 5. Inter-service Security Boundary (Role Enforcement on /internal/**)${RESET}"
 echo -e "  5.1 Without token -> Calling: ${BOLD}GET $INST1/internal/aircraft/CS-TPA${RESET}"
-STATUS_NO_AUTH=$(curl -s -o /dev/null -w "%{http_code}" "$INST1/internal/aircraft/CS-TPA")
+STATUS_NO_AUTH=$(curl -s $CURL_INSECURE -o /dev/null -w "%{http_code}" "$INST1/internal/aircraft/CS-TPA")
 echo -e "      HTTP Status: ${GREEN}$STATUS_NO_AUTH UNAUTHORIZED${RESET}"
 
 echo -e "  5.2 With User/Mechanic token (forbidden on internal service contract):"
-STATUS_USER_AUTH=$(curl -s -o /dev/null -w "%{http_code}" "$INST1/internal/aircraft/CS-TPA" -H "Authorization: Bearer $USER_TOKEN")
+STATUS_USER_AUTH=$(curl -s $CURL_INSECURE -o /dev/null -w "%{http_code}" "$INST1/internal/aircraft/CS-TPA" -H "Authorization: Bearer $USER_TOKEN")
 echo -e "      HTTP Status: ${GREEN}$STATUS_USER_AUTH FORBIDDEN${RESET} (enforced by SecurityConfig hasRole('SERVICE'))"
 echo
 
 # 6. Maintenance Templates & Ongoing Interventions
 echo -e "${YELLOW}>> 6. Maintenance Templates & Checklist Inspection${RESET}"
 echo -e "  Calling: ${BOLD}GET $INST1/api/maintenance-templates/1${RESET}"
-RESP=$(curl -s -i "$INST1/api/maintenance-templates/1" -H "Authorization: Bearer $ADMIN_TOKEN")
+RESP=$(curl -s $CURL_INSECURE -i "$INST1/api/maintenance-templates/1" -H "Authorization: Bearer $ADMIN_TOKEN")
 BODY=$(echo "$RESP" | sed -e '1,/^\r*$/d')
 echo "  Payload: $BODY"
 echo
@@ -138,7 +145,7 @@ echo
 # 7. Maintenance Cost & Turnaround Reports
 echo -e "${YELLOW}>> 7. Maintenance Cost Report per Aircraft${RESET}"
 echo -e "  Calling: ${BOLD}GET $INST1/api/maintenance-records/reports/cost-per-aircraft${RESET}"
-RESP=$(curl -s -i "$INST1/api/maintenance-records/reports/cost-per-aircraft" -H "Authorization: Bearer $ADMIN_TOKEN")
+RESP=$(curl -s $CURL_INSECURE -i "$INST1/api/maintenance-records/reports/cost-per-aircraft" -H "Authorization: Bearer $ADMIN_TOKEN")
 BODY=$(echo "$RESP" | sed -e '1,/^\r*$/d')
 echo "  Payload: $BODY"
 echo

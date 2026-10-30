@@ -43,7 +43,7 @@ if [[ "${1:-}" == "clean" ]]; then
   exit 0
 fi
 
-N=2
+N=3
 FILE_ARGS=(-f docker-compose.yml)
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -65,6 +65,7 @@ echo "=================================================================="
 echo "  Aircraft & Maintenance Cluster is UP in Docker"
 echo "  Instance 1: http://localhost:8081"
 echo "  Instance 2: http://localhost:8091"
+echo "  Instance 3: http://localhost:8101"
 echo "  Stop with:  ./scripts/run-docker.sh down"
 echo "  Logs with:  docker compose logs -f"
 echo "=================================================================="

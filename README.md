@@ -65,15 +65,18 @@ Starts multiple instances locally in the background using lightweight in-memory 
 # Start 3 instances (8081, 8091, 8101):
 ./scripts/run-local.sh -n 3
 
+# With HTTPS / TLS 1.3 encryption in transit:
+./scripts/run-local.sh --tls
+
 # With PostgreSQL instead of H2:
 ./scripts/run-local.sh --postgres
 ```
 
 ### Option B: Docker Compose Multi-Container Cluster
-Builds multi-stage Docker images (Temurin 21) and orchestrates instances with healthchecks:
+Builds multi-stage Docker images (Temurin 21) and orchestrates 3 instances with independent PostgreSQL databases:
 
 ```bash
-# Start cluster with independent PostgreSQL databases:
+# Start 3 instances with dedicated PostgreSQL databases:
 ./scripts/run-docker.sh
 
 # Or with lightweight in-memory H2 (no database containers needed):
@@ -94,21 +97,29 @@ export JAVA_HOME=/home/andrepm2004/.jdks/corretto-21.0.12.1
 ## 5. Live Demonstration & Verification
 
 ### 1. Interactive Cluster Demonstration Script
-With two instances running, execute the automated demonstration script to validate all 7 distributed scenarios live:
+With instances running, execute the automated demonstration script to validate all 7 distributed scenarios live:
 ```bash
+# HTTP:
 ./scripts/demo-cluster.sh
+
+# HTTPS / TLS 1.3:
+./scripts/demo-cluster.sh --tls
 ```
 *Outputs color-coded validation of Local Hit, P2P Forwarding, Reverse Forwarding, Loop Prevention, Security Boundary, and Maintenance Reports.*
 
-### 2. JUnit Automated Test Suite (14 Tests)
+### 2. JUnit Automated Test Suite (132 Tests)
 ```bash
 ./mvnw clean test
 ```
-*Executes unit and integration tests covering domain invariants, MockMvc controllers, security filters, and peer forwarding.*
+*Executes 132 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, cluster replication, and peer forwarding.*
 
-### 3. Newman / Postman Collection (15 Requests, 29 Assertions)
+### 3. Newman / Postman Collection
 ```bash
+# Plain HTTP:
 npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postman/local.postman_environment.json
+
+# HTTPS / TLS 1.3 (verifying trusted CA certificate):
+npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postman/local-https.postman_environment.json --ssl-extra-ca-certs certs/ca.crt
 ```
 *Validates full contract compliance against active cluster instances.*
 

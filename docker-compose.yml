@@ -1,8 +1,8 @@
 # Aircraft & Maintenance Service - Multi-instance replication cluster
-# 2 instances, each with its own independent PostgreSQL database.
+# 3 instances, each with its own independent PostgreSQL database.
 #
 # Usage:
-#   docker compose up --build               # Start 2 instances with PostgreSQL databases
+#   docker compose up --build               # Start 3 instances with PostgreSQL databases
 #   docker compose up -d                    # Start in background
 #   docker compose ps                       # Check status and health
 #   docker compose logs -f                  # View logs
@@ -12,6 +12,7 @@
 # Ports:
 #   aircraft-1: http://localhost:8081  (DB: localhost:5431)
 #   aircraft-2: http://localhost:8091  (DB: localhost:5434)
+#   aircraft-3: http://localhost:8101  (DB: localhost:5437)
 
 x-common-env: &common-env
   JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
@@ -31,7 +32,7 @@ x-postgres-db: &postgres-db
 x-aircraft-instance: &aircraft-instance
   restart: unless-stopped
   healthcheck:
-    test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health || exit 1"]
+    test: ["CMD-SHELL", "curl -fsk https://localhost:8081/actuator/health || curl -fs http://localhost:8081/actuator/health"]
     interval: 10s
     timeout: 3s
     start_period: 40s
@@ -53,7 +54,7 @@ services:
       DB_URL: jdbc:postgresql://aircraft-db-1:5432/aircraft
       DB_USER: aircraft
       DB_PASSWORD: ${DB_PASSWORD:-aircraft}
-      PEERS: http://aircraft-2:8081
+      PEERS: http://aircraft-2:8081,http://aircraft-3:8081
 
   aircraft-db-1:
     <<: *postgres-db
@@ -75,13 +76,36 @@ services:
       DB_URL: jdbc:postgresql://aircraft-db-2:5432/aircraft
       DB_USER: aircraft
       DB_PASSWORD: ${DB_PASSWORD:-aircraft}
-      PEERS: http://aircraft-1:8081
+      PEERS: http://aircraft-1:8081,http://aircraft-3:8081
 
   aircraft-db-2:
     <<: *postgres-db
     ports: ["5434:5432"]
     volumes: ["aircraft-db-2-data:/var/lib/postgresql/data"]
 
+  # ---------- Instance 3 ----------
+  aircraft-3:
+    <<: *aircraft-instance
+    build: .
+    depends_on:
+      aircraft-db-3: { condition: service_healthy }
+    ports: ["8101:8081"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: instance3,postgres
+      INSTANCE_NAME: instance3
+      PORT: 8081
+      DB_URL: jdbc:postgresql://aircraft-db-3:5432/aircraft
+      DB_USER: aircraft
+      DB_PASSWORD: ${DB_PASSWORD:-aircraft}
+      PEERS: http://aircraft-1:8081,http://aircraft-2:8081
+
+  aircraft-db-3:
+    <<: *postgres-db
+    ports: ["5437:5432"]
+    volumes: ["aircraft-db-3-data:/var/lib/postgresql/data"]
+
 volumes:
   aircraft-db-1-data:
   aircraft-db-2-data:
+  aircraft-db-3-data:

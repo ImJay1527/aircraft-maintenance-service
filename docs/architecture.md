@@ -677,6 +677,28 @@ user=admin roles=[ROLE_ADMIN] method=GET uri=/api/maintenance-records/reports/co
 user=flight-operations-service roles=[ROLE_SERVICE] method=GET uri=/internal/aircraft/CS-TPA status=200 remote=172.20.0.10
 ```
 
+### Encryption of Data in Transit (TLS 1.3 / HTTPS)
+Addressing Assignment 1 Requirement 3 (*"Encryption of data in transit"*):
+
+1. **Cryptographic Protocol & Cipher Suite Enforcement:**
+   * **TLS 1.3 Exclusive:** The service strictly activates the `TLSv1.3` protocol (`spring.ssl.bundle.jks.server.options.enabled-protocols=TLSv1.3`), systematically eliminating legacy vulnerabilities inherent to older protocol iterations (e.g., CBC padding oracle attacks, insecure renegotiation, and legacy cipher degradation). Any client attempting connection with TLS 1.2 or plain HTTP is rejected at the handshake stage (TLS Alert 70: `protocol version` or HTTP `400 Bad Request`).
+   * **Forward Secrecy (FS):** Enforces ephemeral Diffie-Hellman key exchange (ECDHE), ensuring that historic captured session traffic cannot be decrypted even if private long-term keys are compromised in the future.
+
+2. **Public Key Infrastructure (PKI) Architecture:**
+   * **Development Certificate Authority:** Utilizes an internal X.509 Root CA (`CN=AISafe Dev CA, O=ISEP SIDIS`) with 2048-bit RSA keys and SHA-384 digital signatures.
+   * **Service Keypair & Subject Alternative Names (SAN):** Service certificate (`aircraft.p12`) contains SAN entries spanning `localhost`, `127.0.0.1`, and Docker virtual network hostnames (`aircraft`, `aircraft-1`, `aircraft-2`, `aircraft-3`), validating hostname verification without suppressing certificate warnings.
+   * **Client Truststore:** Outgoing peer requests through `HttpPeerClient` load `truststore.p12`, trusting only the shared `AISafe Dev CA`.
+
+3. **Architectural Trade-Off Analysis: Edge TLS Termination vs End-to-End TLS:**
+
+| Dimension | Edge TLS Termination (Reverse Proxy / Ingress) | End-to-End TLS (mTLS / Spring SSL Bundles) *(Adopted)* |
+| :--- | :--- | :--- |
+| **Trust Boundary** | Terminates at the gateway; unencrypted plaintext HTTP across internal network hops. | Cryptographic boundary extends directly into the Spring Boot container. |
+| **Zero-Trust Posture** | Vulnerable to internal packet sniffing (e.g., compromised co-located container on Docker bridge). | True **Zero-Trust**: data in transit is encrypted across all inter-service and P2P hops. |
+| **CPU Overhead** | TLS handshake and symmetric ciphering offloaded to reverse proxy (e.g., Nginx). | Handled by JVM via optimized hardware-accelerated AES-NI instructions. |
+| **Operational Simplicity** | Simpler container configuration (plain HTTP internally). | Requires certificate provisioning, keystore distribution, and SSL bundle configuration. |
+| **Defense Justification** | Appropriate for massive edge scale. | **Mandated for critical aviation systems** handling airworthiness and flight readiness data. |
+
 ---
 
 ## 8. Verification & Empirical Validation

@@ -16,14 +16,23 @@ fi
 N=2
 PROFILE=""
 DB=h2
+TLS=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -n) N="$2"; [[ "$N" =~ ^[123]$ ]] || { echo "-n must be 1, 2 or 3"; exit 1; }; shift 2 ;;
     --postgres) DB=postgres; shift ;;
+    --tls) TLS=true; PROFILE="${PROFILE:+$PROFILE,}tls"; shift ;;
     *) echo "unknown option: $1"; exit 1 ;;
   esac
 done
+
+if [[ "$TLS" == true ]]; then
+  if [[ ! -f "certs/aircraft.p12" ]]; then
+    echo "Generating certificates for TLS..."
+    ./scripts/generate-dev-certs.sh
+  fi
+fi
 
 port() { echo $((8081 + 10 * ($1 - 1))); }
 
@@ -69,7 +78,7 @@ for i in $(seq 1 "$N"); do
   PIDS+=($!)
 done
 
-./scripts/wait-ready.sh -n "$N"
+./scripts/wait-ready.sh -n "$N" $([[ "$TLS" == true ]] && echo "--tls")
 
 echo "Instances running. Press Ctrl+C to stop."
 wait

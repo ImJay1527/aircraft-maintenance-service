@@ -33,17 +33,40 @@ public class HttpPeerClient implements PeerClient {
     @Autowired
     public HttpPeerClient(ClusterConfig clusterConfig,
                           JwtUtils jwtUtils,
+                          @Autowired(required = false) org.springframework.boot.ssl.SslBundles sslBundles,
+                          @Value("${sidis.tls.client-bundle:}") String clientBundleName,
                           @Value("${aircraft.peer-timeout-ms:1500}") long timeoutMs) {
         this.clusterConfig = clusterConfig;
         this.jwtUtils = jwtUtils;
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofMillis(timeoutMs));
+        java.net.http.HttpClient.Builder clientBuilder = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(timeoutMs));
+
+        if (sslBundles != null && clientBundleName != null && !clientBundleName.isBlank()) {
+            try {
+                org.springframework.boot.ssl.SslBundle bundle = sslBundles.getBundle(clientBundleName);
+                if (bundle != null) {
+                    clientBuilder.sslContext(bundle.createSslContext());
+                    log.info("HttpPeerClient configured with TLS bundle '{}'", clientBundleName);
+                }
+            } catch (Exception e) {
+                log.warn("Could not load TLS client bundle '{}': {}", clientBundleName, e.getMessage());
+            }
+        }
+
+        org.springframework.http.client.JdkClientHttpRequestFactory requestFactory =
+                new org.springframework.http.client.JdkClientHttpRequestFactory(clientBuilder.build());
         requestFactory.setReadTimeout(Duration.ofMillis(timeoutMs));
 
         this.restClient = RestClient.builder()
                 .requestFactory(requestFactory)
                 .build();
+    }
+
+    public HttpPeerClient(ClusterConfig clusterConfig,
+                          JwtUtils jwtUtils,
+                          long timeoutMs) {
+        this(clusterConfig, jwtUtils, null, null, timeoutMs);
     }
 
     public HttpPeerClient(ClusterConfig clusterConfig, JwtUtils jwtUtils, RestClient restClient) {
