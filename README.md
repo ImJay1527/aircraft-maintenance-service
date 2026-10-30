@@ -107,11 +107,11 @@ With instances running, execute the automated demonstration script to validate a
 ```
 *Outputs color-coded validation of Local Hit, P2P Forwarding, Reverse Forwarding, Loop Prevention, Security Boundary, and Maintenance Reports.*
 
-### 2. JUnit Automated Test Suite (132 Tests)
+### 2. JUnit Automated Test Suite (150 Tests)
 ```bash
 ./mvnw clean test
 ```
-*Executes 132 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, cluster replication, and peer forwarding.*
+*Executes 150 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, Zero SPOF, and peer forwarding.*
 
 ### 3. Newman / Postman Collection
 ```bash

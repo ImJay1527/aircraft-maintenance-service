@@ -705,15 +705,16 @@ Addressing Assignment 1 Requirement 3 (*"Encryption of data in transit"*):
 
 The architecture has been empirically validated against 3 complementary verification suites:
 
-1. **JUnit 5, Mockito & MockMvc Automated Suite (132/132 Pass with 0 Failures):**
+1. **JUnit 5, Mockito & MockMvc Automated Suite (150/150 Pass with 0 Failures):**
    * **Domain Layer (34 tests):** Invariant protection, model compatibility, deep checklist cloning, status transitions, and lifecycle state machines.
    * **Service Layer (31 tests):** Isolated business logic, optimistic locking conflict detection (`409 Conflict`), and analytics aggregations.
    * **REST Controller Layer (25 tests):** HTTP status codes, DTO validation, and error payload compliance.
-   * **Security & RBAC Matrix (14 tests):** Role-based authorization across `ROLE_SERVICE`, `MAINTENANCE_TECHNICIAN`, `MAINTENANCE_SUPERVISOR`, `ATCC`, `ADMIN`, anonymous 401s, forged tokens, and tracing header propagation.
+   * **Security, Audit & RBAC Matrix (23 tests):** Role-based authorization across `ROLE_SERVICE`, `MAINTENANCE_TECHNICIAN`, `MAINTENANCE_SUPERVISOR`, `ATCC`, `ADMIN`, anonymous 401s, forged tokens, `AuditLogFilter` non-repudiation assertions, and `TlsConfigurationIntegrationTest` (validating TLS 1.3 enforcement and Dev CA verification).
+   * **Observability & Request Tracing (5 tests - `RequestTracingFilterTest`):** Propagation and generation of `X-Request-Id`, `X-Instance` injection, and SLF4J MDC cleanup preventing thread-local leakage.
    * **Replication & P2P Client (9 tests):** Resilient HTTP peer queries, timeouts, connection refused handling, and multi-peer failover.
-   * **Distributed Multi-Instance Cluster E2E (9 tests - `TwoInstancesIntegrationTest`):** Launches 2 real Spring Boot processes on dynamic ports (`ServerSocket(0)`), each with an isolated in-memory DB (`cluster_db_1` and `cluster_db_2`). Validates local hits, bidirectional cross-instance forwarding, loop prevention (`X-Forwarded-From`), distributed tracing (`X-Request-Id`), and zero-downtime node crash resilience.
+   * **Multi-Instance Cluster E2E (15 tests across `TwoInstancesIntegrationTest` and `ThreeInstancesIntegrationTest`):** Launches real Spring Boot processes on dynamic ports (`ServerSocket(0)`), each with an isolated in-memory DB (`cluster_db_1`, `cluster_db_2`, `cluster_db_3`). Validates local hits, bidirectional 3-way forwarding, loop prevention (`X-Forwarded-From`), distributed tracing (`X-Request-Id`), and zero-downtime node crash resilience (Zero SPOF).
    * **Integration & Bootstrapping (10 tests):** End-to-end work order lifecycle and service contract conformance.
 2. **Newman / Postman Integration Collection (15/15 Requests, 29/29 Assertions Pass):**
-   * Validates live endpoints on active cluster instances (`8081` and `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, and maintenance cost aggregation.
+   * Validates live endpoints on active cluster instances across both **Plain HTTP** and **HTTPS / TLS 1.3** (`8081`, `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, and maintenance cost aggregation.
 3. **Automated Live Cluster Demonstration (`scripts/demo-cluster.sh`):**
-   * Demonstrates the 7 primary SIDIS scenarios interactively with color-coded CLI outputs for defense presentations.
+   * Demonstrates the 7 primary SIDIS scenarios interactively with color-coded CLI outputs for defense presentations (supporting both `--tls` and standard HTTP).

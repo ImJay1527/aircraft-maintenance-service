@@ -147,6 +147,12 @@ public class Bootstrapper implements CommandLineRunner {
                 aircraftRepository.save(x1);
             }
 
+            if (self != null && self.contains("3")) {
+                Aircraft z1 = new Aircraft("CS-TPZ", a350, LocalDate.of(2023, 9, 15), AircraftStatus.AVAILABLE);
+                z1.addFlightHours(1200.0);
+                aircraftRepository.save(z1);
+            }
+
             logger.info("Aircrafts bootstrapped successfully for [{}]", clusterConfig.getSelfName());
         }
     }
