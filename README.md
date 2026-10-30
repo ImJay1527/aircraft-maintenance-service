@@ -47,8 +47,8 @@ The system architecture is grounded in foundational distributed systems theory:
 
 | Component / Replica | Application Port | Database Engine & Port | Peer URLs | Active Profile |
 | :--- | :--- | :--- | :--- | :--- |
-| **Instance 1 (`aircraft-1`)** | `http://localhost:8081` | PostgreSQL: `5431` / H2 mem | `http://localhost:8091` | `instance1` |
-| **Instance 2 (`aircraft-2`)** | `http://localhost:8091` | PostgreSQL: `5434` / H2 mem | `http://localhost:8081` | `instance2` |
+| **Instance 1 (`aircraft-1`)** | `http://localhost:8081` | PostgreSQL: `5431` / H2 mem | `http://localhost:8091,8101` | `instance1` |
+| **Instance 2 (`aircraft-2`)** | `http://localhost:8091` | PostgreSQL: `5434` / H2 mem | `http://localhost:8081,8101` | `instance2` |
 | **Instance 3 (`aircraft-3`)** | `http://localhost:8101` | PostgreSQL: `5437` / H2 mem | `http://localhost:8081,8091` | `instance3` |
 
 ---
