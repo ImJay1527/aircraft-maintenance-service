@@ -5,6 +5,8 @@
 **Assigned Service**: `aircraft-maintenance-service`  
 **Transversal Responsibility**: Component Cloning, Active Replication, P2P Unicast Query Forwarding & Zero SPOF  
 
+**Contents:** [1. Executive Summary](#1-executive-summary--domain-driven-segregation) · [2. Theoretical Foundations](#2-theoretical-foundations-of-distributed-systems) · [3. FURPS+ Quality](#3-architectural-drivers-furps--isoiec-25010-quality-model) · [4. ADRs](#4-key-architectural-decision-records-adrs) · [5. C4+1 Views](#5-c41-architectural-views) · [6. Performance & Latency](#6-performance--latency-model) · [7. Security & TLS 1.3](#7-security-architecture--rbac-matrix) · [8. Verification](#8-verification--empirical-validation)
+
 ---
 
 ## 1. Executive Summary & Domain-Driven Segregation
