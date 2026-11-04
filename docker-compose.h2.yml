@@ -10,10 +10,14 @@ services:
     ports: ["8081:8081"]
     environment:
       JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
       SPRING_PROFILES_ACTIVE: instance1
       INSTANCE_NAME: instance1
       PORT: 8081
       PEERS: http://aircraft-2:8081,http://aircraft-3:8081
+    depends_on:
+      rabbitmq: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk https://localhost:8081/actuator/health || curl -fs http://localhost:8081/actuator/health"]
       interval: 10s
@@ -27,10 +31,14 @@ services:
     ports: ["8091:8081"]
     environment:
       JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
       SPRING_PROFILES_ACTIVE: instance2
       INSTANCE_NAME: instance2
       PORT: 8081
       PEERS: http://aircraft-1:8081,http://aircraft-3:8081
+    depends_on:
+      rabbitmq: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk https://localhost:8081/actuator/health || curl -fs http://localhost:8081/actuator/health"]
       interval: 10s
@@ -44,13 +52,32 @@ services:
     ports: ["8101:8081"]
     environment:
       JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
       SPRING_PROFILES_ACTIVE: instance3
       INSTANCE_NAME: instance3
       PORT: 8081
       PEERS: http://aircraft-1:8081,http://aircraft-2:8081
+    depends_on:
+      rabbitmq: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk https://localhost:8081/actuator/health || curl -fs http://localhost:8081/actuator/health"]
       interval: 10s
       timeout: 3s
       start_period: 40s
       retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

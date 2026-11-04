@@ -99,16 +99,16 @@ To maintain observability across distributed asynchronous and synchronous bounda
 
 ---
 
-### 2.6 Communication Protocols: Unicast vs. Multicast & Messaging Styles (Commands vs. Events)
+### 2.6 Communication Protocols: Unicast REST & Asynchronous AMQP Broker (RabbitMQ)
 Following the theoretical curriculum on *Communication Protocols in Distributed Systems* (Prof. Orlando Sousa, Lecture *Understanding Unicast vs. Multicast and Messaging Styles in Modern Distributed Architectures*):
 
 * **Unicast Protocol Selection:**
   * While multicast and broadcast deliver packets to multiple network recipients simultaneously, they introduce network flood risks, packet duplication, lack of native TCP-level flow control in application layers, and unpredictable delivery semantics in containerized virtual bridges.
   * `aircraft-maintenance-service` implements **Unicast Point-to-Point HTTP/REST** communication. Unicast enables targeted, deterministic query forwarding directly to configured peer instances (`aircraft.peers`), ensuring that network traffic is strictly proportional to the number of cache misses ($O(1)$ unicast requests rather than $O(N)$ multicast floods).
 * **Messaging Style: Commands (Imperative) vs. Events (Declarative):**
-  * **Commands:** Represent directed instructions to perform a specific action or retrieve specific state with immediate point-to-point request-response semantics (e.g., `GET /internal/aircraft/{reg}`).
-  * **Events:** Represent facts that have already occurred in the domain, broadcast asynchronously to decouple producers from unknown consumers.
-  * In alignment with Assignment 1 project constraints (which focus on synchronous distributed coordination and peer forwarding before introducing message brokers like RabbitMQ in subsequent assignments), the architecture relies exclusively on **Command-driven HTTP/REST interactions**.
+  * **Commands (Synchronous REST):** Represent directed instructions to perform a specific action or retrieve specific state with immediate point-to-point request-response semantics (e.g., `POST /api/maintenance-records`, `GET /internal/aircraft/{reg}`).
+  * **Events (Asynchronous AMQP via RabbitMQ):** Represent facts that have already occurred in the domain, broadcast asynchronously via a Topic Exchange (`aisafe.events`) to decouple producers from unknown consumers (`aircraft.status.changed`, `aircraft.created`, `aircraft.maintenance.completed`).
+  * In Assignment 2, the architecture combines **External HTTP REST** (for external consumers) with **Asynchronous AMQP Event Publishing** (for decoupled inter-service integration and read-side projection updates).
 
 ---
 
@@ -156,6 +156,43 @@ The service implements a multi-layered fault tolerance framework based on the **
 
 ---
 
+### 2.10 Command-Query Responsibility Segregation (CQRS) & Read Projections (Assignment 2)
+In accordance with the Assignment 2 specification, core domain resources managed by the service (aircraft fleet and maintenance interventions) adopt the **CQRS (Command-Query Responsibility Segregation)** pattern:
+
+* **Command Side (Write Model):**
+  * Captures business intent through explicit command objects (`RegisterAircraftCommand`, `UpdateAircraftStatusCommand`, `ScheduleMaintenanceCommand`, `StartMaintenanceCommand`, `CompleteMaintenanceCommand`, `CancelMaintenanceCommand`).
+  * Handled by dedicated Command Handlers (`AircraftCommandHandler`, `MaintenanceCommandHandler`).
+  * Validates domain invariants (e.g. status transition constraints, optimistic locking `@Version` checks) and updates relational aggregates in PostgreSQL / H2.
+  * Emits immutable domain events via `DomainEventPublisher` to RabbitMQ and the internal Spring event bus.
+* **Query Side (Read Model / Projections):**
+  * Decoupled from write-side entities. Designed specifically for fast, non-blocking queries and custom materialized views without complex relational joins.
+  * Read projections (such as `AircraftMoodProjection`) consume domain events reactively to update cached view representations (`AircraftMoodView`).
+  * Queries (`GetAircraftMoodQuery`) are dispatched to dedicated Query Handlers (`AircraftQueryHandler`).
+* **Consistency Model:**
+  * Command execution guarantees strict local consistency (ACID) on the write aggregate.
+  * Read projections are updated reactively with **Eventual Consistency**, ensuring the read side does not impede write throughput or hold locks on transactional tables.
+
+---
+
+### 2.11 Airplane Mood Status & The Unicorns Integration (`/api/v2/unicorns`)
+The Assignment 2 specification mandates a mock endpoint returning the mood status of airplanes in JSON format:
+
+* **Endpoint:** `GET /api/v2/unicorns` and `GET /api/v2/unicorns/{registration}`
+* **CQRS Integration Rationale:**
+  * The `/api/v2/unicorns` endpoint is a textbook example of a **pure CQRS Read Projection**. It does not query the transactional `Aircraft` entity directly nor does it execute JPA joins.
+  * Instead, it queries the `AircraftMoodProjection`, which continuously projects a materialized `AircraftMoodView` derived from domain events:
+    * `AircraftStatusChangedEvent`
+    * `MaintenanceScheduledEvent`
+    * `MaintenanceCompletedEvent`
+  * The projected mood attributes (`HAPPY`, `EXCITED`, `SLEEPY`, `REJUVENATED`, `BORED`, `EXPERIENCED`), energy level (`energyLevel`), and sparkle metric (`sparkleFactor`) reflect real-time operational airworthiness in a playful format:
+    * `AVAILABLE` $\rightarrow$ `HAPPY` (energy: 92%, sparkle: 4.9)
+    * `IN_FLIGHT` $\rightarrow$ `EXCITED` (energy: 98%, sparkle: 5.0)
+    * `UNDER_MAINTENANCE` $\rightarrow$ `SLEEPY` (energy: 40%, sparkle: 3.2)
+    * Maintenance Completed $\rightarrow$ `REJUVENATED` (energy: 100%, sparkle: 5.0)
+    * `INACTIVE` $\rightarrow$ `BORED` (energy: 15%, sparkle: 1.8)
+
+---
+
 ## 3. Architectural Drivers: FURPS+ & ISO/IEC 25010 Quality Model
 
 | Quality Category | ISO 25010 Characteristic | Architectural Implementation & Quality Driver |
@@ -200,6 +237,18 @@ The service implements a multi-layered fault tolerance framework based on the **
 * **Context:** In distributed systems, binary transparency, clean stack traces, and compiler predictability are paramount.
 * **Decision:** Implement all DTOs as Java 21 `record` types and domain entities as explicit POJOs with standard getters/setters and business methods. No Project Lombok dependency in `aircraft-maintenance-service`.
 * **Consequence:** Clean, human-readable code that compiles cleanly across all Java 21 distributions without annotation processor conflicts.
+
+### ADR-6: Command-Query Responsibility Segregation (CQRS) for Core Domain Resources
+* **Status:** Accepted (Mandated by SIDIS Assignment 2).
+* **Context:** Co-locating complex write validation logic with high-throughput read requirements creates database lock contention and impedes independent optimization of query models.
+* **Decision:** Segregate write operations into explicit Command objects handled by transactional Command Handlers (`AircraftCommandHandler`, `MaintenanceCommandHandler`) from read operations served by dedicated Query Handlers and event-driven Read Projections (`AircraftMoodProjection`).
+* **Consequence:** Read and write sides evolve and scale independently. Enables specialized derived views such as `/api/v2/unicorns` without modifying core domain aggregates.
+
+### ADR-7: Asynchronous Event Distribution via RabbitMQ (AMQP Topic Exchange)
+* **Status:** Accepted (Mandated by SIDIS Assignment 2).
+* **Context:** Purely synchronous HTTP communication between services introduces tight temporal coupling, cascading latency, and reduced resilience during network partitions.
+* **Decision:** Introduce a message broker (RabbitMQ `3-management`) with a Topic Exchange (`aisafe.events`). State mutations in `aircraft-maintenance-service` emit domain events (`aircraft.status.changed`, `aircraft.created`, `aircraft.maintenance.completed`) published to the broker for asynchronous consumption by `flight-operations-service`. External client endpoints remain HTTP REST.
+* **Consequence:** Decoupled inter-service integration, asynchronous broadcast capability, and improved partition tolerance under CAP/PACELC models.
 
 ---
 
@@ -720,16 +769,17 @@ Addressing Assignment 1 Requirement 3 (*"Encryption of data in transit"*):
 
 The architecture has been empirically validated against 3 complementary verification suites:
 
-1. **JUnit 5, Mockito & MockMvc Automated Suite (150/150 Pass with 0 Failures):**
+1. **JUnit 5, Mockito & MockMvc Automated Suite (161/161 Pass with 0 Failures):**
    * **Domain Layer (34 tests):** Invariant protection, model compatibility, deep checklist cloning, status transitions, and lifecycle state machines.
    * **Service Layer (31 tests):** Isolated business logic, optimistic locking conflict detection (`409 Conflict`), and analytics aggregations.
-   * **REST Controller Layer (25 tests):** HTTP status codes, DTO validation, and error payload compliance.
+   * **REST Controller Layer (29 tests):** HTTP status codes, DTO validation, error payload compliance, and `UnicornsControllerTest` validating `/api/v2/unicorns` and mood projections.
+   * **CQRS & Event-Driven Architecture (7 tests):** `CqrsIntegrationTest` (commands, event publishing, reactive mood projections, optimistic concurrency) and `RabbitMQMessagingTest` (topic routing keys, JSON serialization, and graceful degradation when broker is offline).
    * **Security, Audit & RBAC Matrix (23 tests):** Role-based authorization across `ROLE_SERVICE`, `MAINTENANCE_TECHNICIAN`, `MAINTENANCE_SUPERVISOR`, `ATCC`, `ADMIN`, anonymous 401s, forged tokens, `AuditLogFilter` non-repudiation assertions, and `TlsConfigurationIntegrationTest` (validating TLS 1.3 enforcement and Dev CA verification).
    * **Observability & Request Tracing (5 tests - `RequestTracingFilterTest`):** Propagation and generation of `X-Request-Id`, `X-Instance` injection, and SLF4J MDC cleanup preventing thread-local leakage.
    * **Replication & P2P Client (9 tests):** Resilient HTTP peer queries, timeouts, connection refused handling, and multi-peer failover.
    * **Multi-Instance Cluster E2E (15 tests across `TwoInstancesIntegrationTest` and `ThreeInstancesIntegrationTest`):** Launches real Spring Boot processes on dynamic ports (`ServerSocket(0)`), each with an isolated in-memory DB (`cluster_db_1`, `cluster_db_2`, `cluster_db_3`). Validates local hits, bidirectional 3-way forwarding, loop prevention (`X-Forwarded-From`), distributed tracing (`X-Request-Id`), and zero-downtime node crash resilience (Zero SPOF).
-   * **Integration & Bootstrapping (10 tests):** End-to-end work order lifecycle and service contract conformance.
-2. **Newman / Postman Integration Collection (15/15 Requests, 29/29 Assertions Pass):**
-   * Validates live endpoints on active cluster instances across both **Plain HTTP** and **HTTPS / TLS 1.3** (`8081`, `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, and maintenance cost aggregation.
+   * **Integration & Bootstrapping (8 tests):** End-to-end work order lifecycle and service contract conformance.
+2. **Newman / Postman Integration Collection (18/18 Requests, 37/37 Assertions Pass):**
+   * Validates live endpoints on active cluster instances across both **Plain HTTP** and **HTTPS / TLS 1.3** (`8081`, `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, maintenance cost aggregation, and the mandatory `/api/v2/unicorns` mock mood status endpoints.
 3. **Automated Live Cluster Demonstration (`scripts/demo-cluster.sh`):**
    * Demonstrates the 7 primary SIDIS scenarios interactively with color-coded CLI outputs for defense presentations (supporting both `--tls` and standard HTTP).

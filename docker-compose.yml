@@ -16,6 +16,10 @@
 
 x-common-env: &common-env
   JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: guest
+  RABBITMQ_PASSWORD: guest
 
 x-postgres-db: &postgres-db
   image: postgres:16-alpine
@@ -45,6 +49,7 @@ services:
     build: .
     depends_on:
       aircraft-db-1: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
     ports: ["8081:8081"]
     environment:
       <<: *common-env
@@ -67,6 +72,7 @@ services:
     build: .
     depends_on:
       aircraft-db-2: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
     ports: ["8091:8081"]
     environment:
       <<: *common-env
@@ -89,6 +95,7 @@ services:
     build: .
     depends_on:
       aircraft-db-3: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
     ports: ["8101:8081"]
     environment:
       <<: *common-env
@@ -104,6 +111,22 @@ services:
     <<: *postgres-db
     ports: ["5437:5432"]
     volumes: ["aircraft-db-3-data:/var/lib/postgresql/data"]
+
+  # ---------- RabbitMQ Message Broker ----------
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
 volumes:
   aircraft-db-1-data:

@@ -10,6 +10,7 @@ import pt.isep.sidis.aircraft.common.exceptions.ResourceNotFoundException;
 import pt.isep.sidis.aircraft.domain.Aircraft;
 import pt.isep.sidis.aircraft.domain.AircraftModel;
 import pt.isep.sidis.aircraft.domain.AircraftStatus;
+import pt.isep.sidis.aircraft.messaging.DomainEventPublisher;
 import pt.isep.sidis.aircraft.repositories.AircraftRepository;
 
 import java.time.LocalDate;
@@ -24,6 +25,9 @@ class AircraftServiceTest {
 
     @Mock
     private AircraftRepository aircraftRepository;
+
+    @Mock
+    private DomainEventPublisher eventPublisher;
 
     @InjectMocks
     private AircraftService aircraftService;

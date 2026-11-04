@@ -107,11 +107,11 @@ With instances running, execute the automated demonstration script to validate a
 ```
 *Outputs color-coded validation of Local Hit, P2P Forwarding, Reverse Forwarding, Loop Prevention, Security Boundary, and Maintenance Reports.*
 
-### 2. JUnit Automated Test Suite (150 Tests)
+### 2. JUnit Automated Test Suite (161 Tests)
 ```bash
 ./mvnw clean test
 ```
-*Executes 150 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, Zero SPOF, and peer forwarding.*
+*Executes 161 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, Zero SPOF, peer forwarding, CQRS command/query handlers, RabbitMQ messaging, and the mandatory `/api/v2/unicorns` mood projection.*
 
 ### 3. Newman / Postman Collection
 ```bash
@@ -121,7 +121,7 @@ npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postma
 # HTTPS / TLS 1.3 (verifying trusted CA certificate):
 npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postman/local-https.postman_environment.json --ssl-extra-ca-certs certs/ca.crt
 ```
-*Validates full contract compliance against active cluster instances.*
+*Validates full contract compliance, RBAC security, and the `/api/v2/unicorns` endpoint against active cluster instances.*
 
 ---
 

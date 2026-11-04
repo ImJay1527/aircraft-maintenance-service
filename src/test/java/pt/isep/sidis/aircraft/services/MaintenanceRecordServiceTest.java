@@ -16,6 +16,7 @@ import pt.isep.sidis.aircraft.domain.MaintenanceRecord;
 import pt.isep.sidis.aircraft.domain.MaintenanceStatus;
 import pt.isep.sidis.aircraft.domain.MaintenanceTemplate;
 import pt.isep.sidis.aircraft.domain.TemplateType;
+import pt.isep.sidis.aircraft.messaging.DomainEventPublisher;
 import pt.isep.sidis.aircraft.repositories.AircraftRepository;
 import pt.isep.sidis.aircraft.repositories.MaintenanceRecordRepository;
 import pt.isep.sidis.aircraft.repositories.MaintenanceTemplateRepository;
@@ -39,6 +40,9 @@ class MaintenanceRecordServiceTest {
 
     @Mock
     private AircraftRepository aircraftRepository;
+
+    @Mock
+    private DomainEventPublisher eventPublisher;
 
     @InjectMocks
     private MaintenanceRecordService service;
