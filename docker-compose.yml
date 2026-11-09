@@ -20,6 +20,7 @@ x-common-env: &common-env
   RABBITMQ_PORT: 5672
   RABBITMQ_USER: guest
   RABBITMQ_PASSWORD: guest
+  RABBITMQ_LISTENER_AUTO_STARTUP: "true"
 
 x-postgres-db: &postgres-db
   image: postgres:16-alpine
