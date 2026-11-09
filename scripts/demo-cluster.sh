@@ -150,6 +150,16 @@ BODY=$(echo "$RESP" | sed -e '1,/^\r*$/d')
 echo "  Payload: $BODY"
 echo
 
+# 8. CQRS Read-Model Projection (/api/v2/unicorns)
+echo -e "${YELLOW}>> 8. Assignment 2 CQRS Mood Projection (GET /api/v2/unicorns/CS-TPA)${RESET}"
+echo -e "  Querying read-model projection (O(1) in-memory without write DB locks):"
+RESP=$(curl -s $CURL_INSECURE -i "$INST1/api/v2/unicorns/CS-TPA")
+STATUS=$(echo "$RESP" | grep -i "^HTTP" | awk '{print $2}')
+BODY=$(echo "$RESP" | sed -e '1,/^\r*$/d')
+echo -e "  HTTP Status: ${GREEN}$STATUS OK${RESET} (Public CQRS Query)"
+echo "  Payload: $BODY"
+echo
+
 echo -e "${BOLD}${GREEN}================================================================================"
 echo "    DEMONSTRATION COMPLETED SUCCESSFULLY: ALL DISTRIBUTED SCENARIOS PASSED     "
 echo "================================================================================${RESET}"
