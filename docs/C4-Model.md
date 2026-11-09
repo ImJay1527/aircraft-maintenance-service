@@ -3,7 +3,7 @@
 **Course**: Sistemas Distribuídos (LETI-SIDIS 2026/27)  
 **Author**: André (1240567)  
 
-**Contents:** [Level 1: Context](#level-1-system-context-diagram) · [UML Logical View](#uml-logical-view-level-1-deployment-independent-component-model) · [Level 2: Containers](#level-2-container-diagram-domain-driven-segregation) · [Level 3: Components](#level-3-component-diagram-inside-aircraft-maintenance-service) · [Deployment View](#level-4-deployment-view-multi-instance-docker-deployment) · [Dynamic Scenarios (+1)](#the-1-dynamic-distributed-behavior-sequence-diagrams)
+**Contents:** [Level 1: Context](#level-1-system-context-diagram) · [UML Logical View](#uml-logical-view-level-1-deployment-independent-component-model) · [Level 2: Containers](#level-2-container-diagram-domain-driven-segregation) · [Level 3: Components](#level-3-component-diagram-inside-aircraft-maintenance-service) · [Deployment View](#level-4-deployment-view-multi-instance-docker-deployment) · [Dynamic Scenarios (+1)](#the-1-dynamic-distributed-behavior-sequence-diagrams) · [AMQP Event-Driven CQRS](#scenario-3-asynchronous-event-driven-collaboration-and-cqrs-projection-update)
 
 ---
 
@@ -88,9 +88,9 @@ flowchart LR
 
 ---
 
-## Level 2: Container Diagram (Domain-Driven Segregation)
+## Level 2: Container Diagram (Domain-Driven Segregation & Asynchronous Messaging)
 
-Illustrates the decomposition of the original PSOFT monolith into three autonomous, domain-aligned microservices, highlighting active component cloning and isolated databases.
+Illustrates the decomposition of the original PSOFT monolith into three autonomous, domain-aligned microservices, highlighting active component cloning, isolated databases, and asynchronous event distribution via RabbitMQ.
 
 ```mermaid
 %% C4 Level 2 - Container Diagram
@@ -98,10 +98,11 @@ flowchart TB
     classDef person fill:#08427b,stroke:#052e56,color:#fff;
     classDef container fill:#438dd5,stroke:#2e6295,color:#fff;
     classDef db fill:#2e6295,stroke:#11365c,color:#fff,shape:cylinder;
+    classDef broker fill:#c2410c,stroke:#9a3412,color:#fff;
 
     Users[("Operators, Mechanics & Dispatchers<br/>[Person]")]:::person
 
-    subgraph AISafe["AISafe Distributed Architecture (Zero SPOF)"]
+    subgraph AISafe["AISafe Distributed Architecture (Zero SPOF & Event-Driven)"]
         subgraph AM_Cluster["aircraft-maintenance-service (This Component)"]
             am1["aircraft-1<br/>[Container: Spring Boot 3]<br/>Port :8081"]:::container
             am2["aircraft-2<br/>[Container: Spring Boot 3]<br/>Port :8091"]:::container
@@ -115,6 +116,10 @@ flowchart TB
             am1 <-->|"P2P Forwarding<br/>(SERVICE JWT, X-Forwarded-From)"| am2
             am2 <-->|"P2P Forwarding"| am3
             am1 <-->|"P2P Forwarding"| am3
+        end
+
+        subgraph Broker_Cluster["Message Broker Tier"]
+            rmq["RabbitMQ 3 Message Broker<br/>[Container: rabbitmq:3-management]<br/>Topic Exchange: aisafe.events<br/>Ports: 5672 (AMQP), 15672 (UI)"]:::broker
         end
 
         subgraph FO_Cluster["flight-operations-service"]
@@ -140,24 +145,37 @@ flowchart TB
 
     fo1 -->|"Inter-Service Query<br/>GET /internal/aircraft/{reg}<br/>(Role: SERVICE)"| am1
     fo1 -->|"Inter-Service Query<br/>GET /internal/routes/{id}<br/>(Role: SERVICE)"| ar1
+
+    am1 -.->|"AMQP: aircraft.* (status, created, maintenance)"| rmq
+    am2 -.->|"AMQP: aircraft.*"| rmq
+    am3 -.->|"AMQP: aircraft.*"| rmq
+    rmq -.->|"AMQP Queue: aircraft.events.queue (flight.completed)"| am1
+    rmq -.->|"AMQP Queue: aircraft.events.queue (flight.completed)"| am2
+    rmq -.->|"AMQP Queue: aircraft.events.queue (flight.completed)"| am3
+
+    fo1 -.->|"AMQP: flight.completed"| rmq
+    fo2 -.->|"AMQP: flight.completed"| rmq
 ```
 
 ---
 
 ## Level 3: Component Diagram (Inside an `aircraft-maintenance-service` Instance)
 
-Details the internal components of a single instance, including the security and distributed tracing filter chain, REST controllers, domain services, P2P peer client, and data persistence repositories.
+Details the internal components of a single instance, including the security and distributed tracing filter chain, REST presentation controllers, CQRS command/query handlers, reactive read-model projections, domain services, AMQP event publisher and listener, P2P peer client, and data persistence repositories.
 
 ```mermaid
 %% C4 Level 3 - Component Diagram
 flowchart TB
     classDef filter fill:#d97706,stroke:#92400e,color:#fff;
     classDef ctrl fill:#1168bd,stroke:#0b4884,color:#fff;
+    classDef cqrs fill:#7c3aed,stroke:#5b21b6,color:#fff;
     classDef svc fill:#2563eb,stroke:#1d4ed8,color:#fff;
+    classDef msg fill:#c2410c,stroke:#9a3412,color:#fff;
     classDef repo fill:#475569,stroke:#1e293b,color:#fff;
     classDef db fill:#1e3a8a,stroke:#172554,color:#fff,shape:cylinder;
 
     dbEngine[("Isolated DB<br/>[H2 / PostgreSQL 16]")]:::db
+    extRabbit(["RabbitMQ Exchange<br/>aisafe.events"]):::msg
 
     subgraph Instance["aircraft-maintenance-service Instance"]
         subgraph Pipeline["Filter Chain (Ordered)"]
@@ -174,6 +192,15 @@ flowchart TB
             cAircraft["AircraftController<br/>Handles /api/aircrafts/**<br/>Roles: MECHANIC, ADMIN"]:::ctrl
             cTemplate["MaintenanceTemplateController<br/>Handles /api/maintenance-templates/**<br/>Roles: TECHNICIAN, SUPERVISOR"]:::ctrl
             cRecord["MaintenanceRecordController<br/>Handles /api/maintenance-records/**<br/>Roles: TECHNICIAN, SUPERVISOR"]:::ctrl
+            cUnicorns["UnicornsController<br/>Handles /api/v2/unicorns/**<br/>Public CQRS Mood Query"]:::ctrl
+        end
+
+        subgraph CQRS_Tier["CQRS (Command & Query Separation)"]
+            direction TB
+            hAircraftCmd["AircraftCommandHandler<br/>RegisterAircraftCommand<br/>UpdateAircraftStatusCommand"]:::cqrs
+            hMaintCmd["MaintenanceCommandHandler<br/>ScheduleMaintenanceCommand<br/>Start/Complete/CancelMaintenanceCommand"]:::cqrs
+            hAircraftQuery["AircraftQueryHandler<br/>GetAircraftMoodQuery"]:::cqrs
+            projMood["AircraftMoodProjection<br/>In-Memory Reactive Read-Model<br/>ConcurrentMap of AircraftMoodView"]:::cqrs
         end
 
         subgraph Core["Domain Services & Peer Coordination"]
@@ -183,6 +210,12 @@ flowchart TB
             sRecord["MaintenanceRecordService<br/>Work order lifecycle, turnaround & cost calculations"]:::svc
             sPeer["HttpPeerClient<br/>Unicast HTTP GET with connect/read timeout"]:::svc
             cfgCluster["ClusterConfig<br/>Self identity & Peer URLs"]:::svc
+        end
+
+        subgraph Messaging_Tier["AMQP & Event Distribution Tier"]
+            direction TB
+            pubEvent["DomainEventPublisher<br/>Local Spring Events + RabbitMQ Topic<br/>(aircraft.status.changed, aircraft.created, etc.)"]:::msg
+            lisFlight["FlightEventsListener<br/>@RabbitListener on aircraft.events.queue<br/>Consumes flight.completed"]:::msg
         end
 
         subgraph Repos["Data Access Layer (Spring Data JPA)"]
@@ -204,14 +237,28 @@ flowchart TB
     cAircraft --> sAircraft
     cTemplate --> sTemplate
     cRecord --> sRecord
+    cUnicorns --> hAircraftQuery
 
+    hAircraftQuery --> projMood
+    projMood -.->|"Subscribes locally to"| pubEvent
+
+    sAircraft --> pubEvent
     sAircraft --> rAircraft
     sAircraft --> rModel
-    sTemplate --> rTemplate
-    sTemplate --> rModel
+    hAircraftCmd --> sAircraft
+
+    sRecord --> pubEvent
     sRecord --> rRecord
     sRecord --> rAircraft
     sRecord --> rTemplate
+    hMaintCmd --> sRecord
+
+    sTemplate --> rTemplate
+    sTemplate --> rModel
+
+    pubEvent -.->|"AMQP Publish"| extRabbit
+    extRabbit -.->|"AMQP Deliver"| lisFlight
+    lisFlight --> sAircraft
 
     rAircraft --- dbEngine
     rModel --- dbEngine
@@ -232,6 +279,7 @@ flowchart TB
     classDef app fill:#0284c7,stroke:#0369a1,color:#fff;
     classDef db fill:#16a34a,stroke:#15803d,color:#fff;
     classDef vol fill:#ea580c,stroke:#c2410c,color:#fff,stroke-dasharray: 5 5;
+    classDef broker fill:#c2410c,stroke:#9a3412,color:#fff;
 
     clientNode["Client Application / Postman / Flight Operations"]:::client
 
@@ -240,6 +288,10 @@ flowchart TB
             inst1["Container: aircraft-1<br/>Port: 8081<br/>Exposed: 8081:8081<br/>Profile: instance1,postgres"]:::app
             inst2["Container: aircraft-2<br/>Port: 8081<br/>Exposed: 8091:8081<br/>Profile: instance2,postgres"]:::app
             inst3["Container: aircraft-3<br/>Port: 8081<br/>Exposed: 8101:8081<br/>Profile: instance3,postgres"]:::app
+        end
+
+        subgraph BrokerCluster["Messaging Tier (AMQP Message Broker)"]
+            rmq["Container: rabbitmq<br/>Image: rabbitmq:3-management<br/>Ports: 5672:5672, 15672:15672<br/>Healthcheck: rabbitmq-diagnostics"]:::broker
         end
 
         subgraph DBCluster["Persistence Tier (PostgreSQL 16 Alpine)"]
@@ -266,6 +318,10 @@ flowchart TB
     inst1 -->|"JDBC: postgresql://aircraft-db-1:5432/aircraft"| db1
     inst2 -->|"JDBC: postgresql://aircraft-db-2:5432/aircraft"| db2
     inst3 -->|"JDBC: postgresql://aircraft-db-3:5432/aircraft"| db3
+
+    inst1 -.->|"AMQP: 5672"| rmq
+    inst2 -.->|"AMQP: 5672"| rmq
+    inst3 -.->|"AMQP: 5672"| rmq
 
     db1 --- v1
     db2 --- v2
@@ -330,4 +386,43 @@ sequenceDiagram
     Note over A1: Loop Prevention Check:<br/>X-Forwarded-From header is present ("instance2").<br/>CRITICAL: Do NOT query any peer. Stop propagation immediately.
 
     A1-->>A2: 404 Not Found<br/>X-Instance: instance1<br/>X-Request-Id: req-202
+```
+
+---
+
+### Scenario 3: Asynchronous Event-Driven Collaboration and CQRS Projection Update
+Demonstrates inter-service decoupled communication via RabbitMQ (`aisafe.events`), in-process reactive event handling, and CQRS read model updating with zero write-DB lock contention.
+
+```mermaid
+%% Sequence Diagram: AMQP Event Distribution & CQRS Read-Model Projection
+sequenceDiagram
+    autonumber
+    participant FO as Flight Operations Service
+    participant RMQ as RabbitMQ (Exchange: aisafe.events)
+    participant LIS as FlightEventsListener (aircraft-1)
+    participant SVC as AircraftService
+    participant DB as Database 1 (Write Model)
+    participant PUB as DomainEventPublisher
+    participant PROJ as AircraftMoodProjection (Read Model)
+    participant Client as Frontend / Monitoring Client
+
+    Note over FO,RMQ: 1. Flight completes at destination airport
+    FO->>RMQ: BasicPublish(exchange="aisafe.events", routingKey="flight.completed", FlightCompletedEvent)
+    
+    Note over RMQ,LIS: 2. Asynchronous AMQP dispatch to bound queue
+    RMQ->>LIS: Deliver payload to queue "aircraft.events.queue"
+    LIS->>SVC: recordFlightHours("CS-TPA", 3.5, false)
+    SVC->>DB: UPDATE aircraft SET flight_hours = flight_hours + 3.5, status = 'AVAILABLE'
+    DB-->>SVC: Rows updated (1)
+    
+    Note over SVC,PUB: 3. Publish domain event locally and to RabbitMQ
+    SVC->>PUB: publish(AircraftStatusChangedEvent("CS-TPA", "AVAILABLE"))
+    PUB-->>RMQ: BasicPublish("aisafe.events", "aircraft.status.changed", event)
+    PUB->>PROJ: ApplicationEventPublisher (In-process reactive dispatch)
+    
+    Note over PROJ: 4. Read-model projection updates in memory:<br/>registration: CS-TPA<br/>mood: HAPPY / REJUVENATED<br/>energyLevel: 85, sparkleFactor: 90
+    
+    Note over Client,PROJ: 5. Public query executes instantaneously with O(1) in-memory lookup
+    Client->>LIS: GET /api/v2/unicorns/CS-TPA
+    LIS-->>Client: 200 OK + AircraftMoodView (Zero DB lock contention)
 ```

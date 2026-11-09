@@ -87,7 +87,7 @@ O professor perguntará: *"Qualquer utilizador pode chamar qualquer endpoint? Co
    cd aircraft-maintenance-service
    JAVA_HOME=/home/andrepm2004/.jdks/corretto-21.0.12.1 ./mvnw test -q
    ```
-   *(Mostrar que todos os 161 testes automatizados passam com 0 falhas).*
+   *(Mostrar que todos os 163 testes automatizados passam com 0 falhas).*
 
 2. **Mostrar a Coleção do Postman (incluindo o endpoint `/api/v2/unicorns`):**
    ```bash

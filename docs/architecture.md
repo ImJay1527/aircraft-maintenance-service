@@ -769,11 +769,11 @@ Addressing Assignment 1 Requirement 3 (*"Encryption of data in transit"*):
 
 The architecture has been empirically validated against 3 complementary verification suites:
 
-1. **JUnit 5, Mockito & MockMvc Automated Suite (161/161 Pass with 0 Failures):**
+1. **JUnit 5, Mockito & MockMvc Automated Suite (163/163 Pass with 0 Failures):**
    * **Domain Layer (34 tests):** Invariant protection, model compatibility, deep checklist cloning, status transitions, and lifecycle state machines.
    * **Service Layer (31 tests):** Isolated business logic, optimistic locking conflict detection (`409 Conflict`), and analytics aggregations.
    * **REST Controller Layer (29 tests):** HTTP status codes, DTO validation, error payload compliance, and `UnicornsControllerTest` validating `/api/v2/unicorns` and mood projections.
-   * **CQRS & Event-Driven Architecture (7 tests):** `CqrsIntegrationTest` (commands, event publishing, reactive mood projections, optimistic concurrency) and `RabbitMQMessagingTest` (topic routing keys, JSON serialization, and graceful degradation when broker is offline).
+   * **CQRS & Event-Driven Architecture (9 tests):** `CqrsIntegrationTest` (commands, event publishing, reactive mood projections, optimistic concurrency), `RabbitMQMessagingTest` (topic routing keys, JSON serialization, and graceful degradation when broker is offline), and `FlightEventsListenerTest` (asynchronous consumption of `FlightCompletedEvent` via AMQP).
    * **Security, Audit & RBAC Matrix (23 tests):** Role-based authorization across `ROLE_SERVICE`, `MAINTENANCE_TECHNICIAN`, `MAINTENANCE_SUPERVISOR`, `ATCC`, `ADMIN`, anonymous 401s, forged tokens, `AuditLogFilter` non-repudiation assertions, and `TlsConfigurationIntegrationTest` (validating TLS 1.3 enforcement and Dev CA verification).
    * **Observability & Request Tracing (5 tests - `RequestTracingFilterTest`):** Propagation and generation of `X-Request-Id`, `X-Instance` injection, and SLF4J MDC cleanup preventing thread-local leakage.
    * **Replication & P2P Client (9 tests):** Resilient HTTP peer queries, timeouts, connection refused handling, and multi-peer failover.
