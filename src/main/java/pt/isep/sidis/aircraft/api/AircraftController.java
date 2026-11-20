@@ -2,6 +2,9 @@ package pt.isep.sidis.aircraft.api;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import pt.isep.sidis.aircraft.cqrs.commands.RegisterAircraftCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.UpdateAircraftStatusCommand;
+import pt.isep.sidis.aircraft.cqrs.handlers.AircraftCommandHandler;
 import pt.isep.sidis.aircraft.domain.Aircraft;
 import pt.isep.sidis.aircraft.services.AircraftService;
 
@@ -10,9 +13,11 @@ import pt.isep.sidis.aircraft.services.AircraftService;
 public class AircraftController {
 
     private final AircraftService aircraftService;
+    private final AircraftCommandHandler commandHandler;
 
-    public AircraftController(AircraftService aircraftService) {
+    public AircraftController(AircraftService aircraftService, AircraftCommandHandler commandHandler) {
         this.aircraftService = aircraftService;
+        this.commandHandler = commandHandler;
     }
 
     @GetMapping("/{registrationNumber}")
@@ -23,8 +28,25 @@ public class AircraftController {
 
     @PostMapping
     public ResponseEntity<Aircraft> createAircraft(@RequestBody Aircraft aircraft) {
-        // Simple creation for Week 1 demonstration
-        Aircraft created = aircraftService.createAircraft(aircraft);
+        String modelRef = (aircraft.getModel() != null && aircraft.getModel().getName() != null && !aircraft.getModel().getName().isBlank())
+                ? aircraft.getModel().getName()
+                : (aircraft.getModel() != null && aircraft.getModel().getId() != null
+                    ? String.valueOf(aircraft.getModel().getId())
+                    : "A320neo");
+
+        Aircraft created = commandHandler.handle(new RegisterAircraftCommand(
+                aircraft.getRegistrationNumber(),
+                aircraft.getRegistrationNumber(),
+                modelRef
+        ));
         return ResponseEntity.ok(created);
+    }
+
+    @PatchMapping("/{registrationNumber}/status")
+    public ResponseEntity<Aircraft> updateStatus(
+            @PathVariable String registrationNumber,
+            @RequestParam String status) {
+        Aircraft updated = commandHandler.handle(new UpdateAircraftStatusCommand(registrationNumber, status));
+        return ResponseEntity.ok(updated);
     }
 }

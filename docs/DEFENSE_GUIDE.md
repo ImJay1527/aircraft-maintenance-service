@@ -30,21 +30,26 @@ O professor pergunta com frequência: *"Porque dividiram o sistema desta forma? 
 
 ---
 
-## 2. Como é garantida a Tolerância a Falhas e a ausência de SPOF (Single Point of Failure)?
+## 2. Como é garantida a Tolerância a Falhas e a questão do SPOF (Single Point of Failure)?
 
-O professor perguntará: *"Se um servidor ou base de dados for abaixo, o sistema para? Onde está o vosso SPOF?"*
+O professor perguntará: *"Se um servidor ou base de dados for abaixo, o sistema para? Onde está o vosso SPOF? E o RabbitMQ?"*
 
 ### A Resposta:
-> *"A nossa arquitetura tem **Zero SPOF** graças à replicação P2P (Peer-to-Peer) e ao isolamento de armazenamento por réplica."*
+> *"A nível aplicacional e de dados, temos **Zero SPOF** graças à replicação multi-instância e isolamento de base de dados por réplica. Ao nível da mensageria assíncrona, reconhecemos que um único container RabbitMQ seria um SPOF de infraestrutura, pelo que implementámos o padrão **Transactional Outbox** para garantir resiliência absoluta."*
 
 1. **Armazenamento Descentralizado:**
-   - Cada réplica do microsserviço tem a sua própria instância de base de dados (em memória H2 ou PostgreSQL independente). Não existe uma base de dados única central que, ao falhar, deite o sistema abaixo.
-2. **P2P HTTP Forwarding & Prevenção de Loops (Leituras Resilientes):**
-   - Implementado em `HttpPeerClient.java` (que implementa `PeerClient.java`) e coordenado por `ClusterConfig.java`.
-   - Se um pedido de leitura (`GET`) chega à Réplica 1 e a aeronave não existe localmente (cache miss), a Réplica 1 consulta a sua lista de peers (`PEERS=http://localhost:8091,...`) usando autenticação JWT com a role `SERVICE`.
-   - **Prevenção de Loops:** O pedido para o peer inclui o cabeçalho `X-Forwarded-From: instance1`. Se a Réplica 2 também não tiver o dado, ao detetar esse cabeçalho responde `404` imediatamente e **nunca** volta a encaminhar, prevenindo ciclos infinitos.
-   - **Rastreabilidade de Dados:** O cabeçalho `X-Data-Source: local` ou `peer` comprova ao cliente de onde veio a resposta.
-   - **Tolerância a nós caídos:** Se um peer estiver offline ou der timeout (1500ms), a exceção é capturada com aviso e a execução continua para os restantes peers sem interromper o serviço.
+   - Cada réplica do microsserviço tem a sua própria base de dados independente (H2 ou PostgreSQL). Se a Réplica 1 for abaixo, as Réplicas 2 e 3 continuam a operar sem qualquer interrupção.
+2. **P2P HTTP Forwarding & Prevenção de Loops:**
+   - Se um pedido de leitura chega a uma réplica e a aeronave não está na sua partição local, consulta os peers usando JWT (`ROLE_SERVICE`).
+   - O cabeçalho `X-Forwarded-From: instance1` previne ciclos infinitos: o peer que recebe nunca reencaminha.
+   - **404 Not Found vs. 503 Service Unavailable:**
+     - **404 Not Found:** É uma resposta *definitiva* (todas as instâncias ativas responderam afirmativamente que a aeronave não existe).
+     - **503 Service Unavailable:** Se um peer não responder (timeout ou conexão recusada), a indisponibilidade deve ser sinalizada como 503, pois em sistemas distribuídos a falha de comunicação impede garantir a inexistência do dado.
+3. **Resiliência do Broker RabbitMQ (Transactional Outbox Pattern):**
+   - Se o RabbitMQ cair, **o serviço NÃO perde eventos nem falha transações**:
+     - O evento é gravado na tabela `outbox_events` na mesma transação da escrita de negócio.
+     - O `OutboxDispatcher` retenta periodicamente com backoff exponencial. Quando o RabbitMQ regressar, descarrega todos os eventos pendentes (garantia *at-least-once*).
+   - Em produção empresarial, a infraestrutura utilizaria um **Cluster RabbitMQ de 3 nós com Quorum Queues (algoritmo de consenso Raft)** para eliminar o SPOF no próprio broker.
 
 ---
 
@@ -110,15 +115,18 @@ O professor perguntará com certeza: *"Como implementaram o CQRS e como é que o
 > 
 > *Desta forma, garantimos que leituras de monitorização e dashboards nunca bloqueiam transações de escrita e respeitamos a consistência eventual."*
 
-* **Write Side (Commands):**
-  - `RegisterAircraftCommand`, `UpdateAircraftStatusCommand`, `ScheduleMaintenanceCommand`, `StartMaintenanceCommand`, `CompleteMaintenanceCommand`.
-  - Processados por `AircraftCommandHandler` e `MaintenanceCommandHandler` com validação de invariantes e persistência transacional.
-* **Domain Events:**
+* **Write Side (Commands & Command Handlers):**
+  - Os controllers de escrita (`AircraftController` e `MaintenanceRecordController`) invocam **diretamente os Command Handlers**:
+    - `AircraftCommandHandler`: `RegisterAircraftCommand`, `UpdateAircraftStatusCommand`.
+    - `MaintenanceCommandHandler`: `ScheduleMaintenanceCommand`, `StartMaintenanceCommand`, `CompleteMaintenanceCommand`, `CancelMaintenanceCommand`.
+  - O fluxo de escrita é 100% auditável através do padrão Command, validando regras de negócio e versionamento otimista (`@Version`).
+* **Domain Events & Transactional Outbox:**
   - `AircraftStatusChangedEvent`, `AircraftCreatedEvent`, `MaintenanceScheduledEvent`, `MaintenanceCompletedEvent`.
-  - Publicados via `DomainEventPublisher` tanto localmente para projeções CQRS como para o RabbitMQ.
-* **Read Side (Queries / Projeções):**
+  - Os eventos são persistidos na mesma transação atómica na tabela `outbox_events` (Transactional Outbox) e publicados assincronamente para o RabbitMQ e localmente para o read model.
+* **Read Side (Persistent Read Model & Queries):**
   - `GetAircraftMoodQuery` processada por `AircraftQueryHandler`.
-  - `AircraftMoodProjection` atualiza reativamente a view `AircraftMoodView` (`mood`, `energyLevel`, `sparkleFactor`, `statusMessage`).
+  - `AircraftMoodProjection` gere a tabela persistente `aircraft_mood_views` (`AircraftMoodEntity`), desacoplada das tabelas de escrita.
+  - Sobrevive a restarts do serviço e mantém estados de humor como `ANTICIPATING` (manutenção agendada) e `REJUVENATED` (manutenção concluída).
 
 ---
 
@@ -131,4 +139,8 @@ O professor perguntará: *"Porque usam RabbitMQ e como comunicam os serviços en
 > 
 > *Configurámos uma Topic Exchange chamada `aisafe.events`. Sempre que o estado de uma aeronave muda no nosso serviço (ex: entra em manutenção ou é concluída uma revisão), publicamos um evento assíncrono com a routing key apropriada (`aircraft.status.changed`, `aircraft.maintenance.completed`). O `flight-operations-service` subscreve estes eventos para saber em tempo real que o avião está indisponível para voos, sem necessidade de fazer polling contínuo via HTTP.*
 > 
-> *Além disso, implementámos **degradação graciosa (Fault Tolerance)**: se o broker RabbitMQ estiver temporariamente offline, as operações de escrita locais continuam a ser processadas com sucesso, registando um aviso estruturado nos logs sem quebrar o cliente."*
+> *Implementámos quatro pilares de resiliência recomendados pelas boas práticas de sistemas distribuídos:
+> 1. **Publish/Subscribe por réplica:** Fila dedicada por réplica (`aircraft.flight-events.<instance>`), garantindo que todas as instâncias recebem os eventos de voo e a réplica dona da aeronave os processa, eliminando o problema de perda de dados de Work Queues.
+> 2. **Prevenção de Loopback:** Fila ligada exclusivamente a `flight.#`, impedindo que os eventos de aeronave voltem para o próprio consumidor.
+> 3. **Dead Letter Exchange (DLX) e Dead Letter Queue (DLQ):** Exchange `aisafe.dlx` e fila `aircraft.events.dlq`. Com retry configurado para 3 tentativas e `requeue=false`, mensagens que falham não ficam em loop infinito.
+> 4. **Transactional Outbox Pattern:** Garante envio fiável 'at-least-once' e elimina 'phantom events' em caso de rollback."*

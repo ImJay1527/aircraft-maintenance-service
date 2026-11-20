@@ -15,6 +15,11 @@ import pt.isep.sidis.aircraft.api.dto.CancelMaintenanceRecordDTO;
 import pt.isep.sidis.aircraft.api.dto.CompleteMaintenanceRecordDTO;
 import pt.isep.sidis.aircraft.api.dto.CreateMaintenanceRecordDTO;
 import pt.isep.sidis.aircraft.api.dto.VersionedActionDTO;
+import pt.isep.sidis.aircraft.cqrs.commands.CancelMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.CompleteMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.ScheduleMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.StartMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.handlers.MaintenanceCommandHandler;
 import pt.isep.sidis.aircraft.domain.Aircraft;
 import pt.isep.sidis.aircraft.domain.AircraftModel;
 import pt.isep.sidis.aircraft.domain.AircraftStatus;
@@ -47,6 +52,9 @@ class MaintenanceRecordControllerTest {
     @MockBean
     private MaintenanceRecordService recordService;
 
+    @MockBean
+    private MaintenanceCommandHandler commandHandler;
+
     private MaintenanceRecord record;
 
     @BeforeEach
@@ -68,7 +76,7 @@ class MaintenanceRecordControllerTest {
                 "CS-TPA", 1L, "Scheduled A-Check", LocalDate.now(), 8.0, "AIRFRAME", 1500.0
         );
 
-        when(recordService.createRecord(any(), any(), any(), any(), any(), any(), any()))
+        when(commandHandler.handle(any(ScheduleMaintenanceCommand.class)))
                 .thenReturn(record);
 
         mockMvc.perform(post("/api/maintenance-records")
@@ -84,7 +92,7 @@ class MaintenanceRecordControllerTest {
     @WithMockUser(roles = "MAINTENANCE_TECHNICIAN")
     void startRecordReturns200OnSuccess() throws Exception {
         record.startWork();
-        when(recordService.startRecord(eq(50L), eq(0L))).thenReturn(record);
+        when(commandHandler.handle(any(StartMaintenanceCommand.class))).thenReturn(record);
 
         VersionedActionDTO dto = new VersionedActionDTO(0L);
 
@@ -98,7 +106,7 @@ class MaintenanceRecordControllerTest {
     @Test
     @WithMockUser(roles = "MAINTENANCE_TECHNICIAN")
     void startRecordOptimisticLockFailureReturns409Conflict() throws Exception {
-        when(recordService.startRecord(eq(50L), eq(99L)))
+        when(commandHandler.handle(any(StartMaintenanceCommand.class)))
                 .thenThrow(new ObjectOptimisticLockingFailureException(MaintenanceRecord.class, 50L));
 
         VersionedActionDTO dto = new VersionedActionDTO(99L);
@@ -114,7 +122,7 @@ class MaintenanceRecordControllerTest {
     void completeRecordReturns200OnSuccess() throws Exception {
         record.startWork();
         record.markAsCompleted("Complete", 7.0, 1400.0);
-        when(recordService.completeRecord(eq(50L), eq(0L), any(), any(), any()))
+        when(commandHandler.handle(any(CompleteMaintenanceCommand.class)))
                 .thenReturn(record);
 
         CompleteMaintenanceRecordDTO dto = new CompleteMaintenanceRecordDTO(
@@ -132,7 +140,7 @@ class MaintenanceRecordControllerTest {
     @WithMockUser(roles = "MAINTENANCE_TECHNICIAN")
     void cancelRecordReturns200OnSuccess() throws Exception {
         record.cancel("Cancelled by dispatcher");
-        when(recordService.cancelRecord(eq(50L), eq(0L), any()))
+        when(commandHandler.handle(any(CancelMaintenanceCommand.class)))
                 .thenReturn(record);
 
         CancelMaintenanceRecordDTO dto = new CancelMaintenanceRecordDTO(

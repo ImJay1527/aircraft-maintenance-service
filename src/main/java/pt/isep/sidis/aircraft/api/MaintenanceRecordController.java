@@ -11,6 +11,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import pt.isep.sidis.aircraft.api.dto.*;
+import pt.isep.sidis.aircraft.cqrs.commands.CancelMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.CompleteMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.ScheduleMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.commands.StartMaintenanceCommand;
+import pt.isep.sidis.aircraft.cqrs.handlers.MaintenanceCommandHandler;
 import pt.isep.sidis.aircraft.domain.MaintenanceComponent;
 import pt.isep.sidis.aircraft.domain.MaintenanceRecord;
 import pt.isep.sidis.aircraft.services.MaintenanceRecordService;
@@ -24,11 +29,14 @@ import java.util.List;
 public class MaintenanceRecordController {
 
     private final MaintenanceRecordService recordService;
+    private final MaintenanceCommandHandler commandHandler;
     private final MaintenanceRecordModelAssembler assembler;
 
     public MaintenanceRecordController(MaintenanceRecordService recordService,
+                                       MaintenanceCommandHandler commandHandler,
                                        MaintenanceRecordModelAssembler assembler) {
         this.recordService = recordService;
+        this.commandHandler = commandHandler;
         this.assembler = assembler;
     }
 
@@ -46,15 +54,17 @@ public class MaintenanceRecordController {
     public ResponseEntity<MaintenanceRecordResponseDTO> createRecord(
             @Valid @RequestBody CreateMaintenanceRecordDTO dto) {
 
-        MaintenanceRecord created = recordService.createRecord(
+        parseComponent(dto.getComponent());
+
+        MaintenanceRecord created = commandHandler.handle(new ScheduleMaintenanceCommand(
                 dto.getRegistrationNumber(),
                 dto.getTemplateId(),
                 dto.getDescription(),
                 dto.getStartDate(),
                 dto.getExpectedDurationHours(),
-                parseComponent(dto.getComponent()),
+                dto.getComponent(),
                 dto.getEstimatedCost()
-        );
+        ));
 
         return new ResponseEntity<>(assembler.toModel(created), HttpStatus.CREATED);
     }
@@ -120,7 +130,7 @@ public class MaintenanceRecordController {
             @PathVariable Long id,
             @Valid @RequestBody VersionedActionDTO dto) {
 
-        MaintenanceRecord updated = recordService.startRecord(id, dto.getVersion());
+        MaintenanceRecord updated = commandHandler.handle(new StartMaintenanceCommand(id, dto.getVersion()));
         return ResponseEntity.ok(assembler.toModel(updated));
     }
 
@@ -139,13 +149,13 @@ public class MaintenanceRecordController {
             @PathVariable Long id,
             @Valid @RequestBody CompleteMaintenanceRecordDTO dto) {
 
-        MaintenanceRecord updated = recordService.completeRecord(
+        MaintenanceRecord updated = commandHandler.handle(new CompleteMaintenanceCommand(
                 id,
                 dto.getVersion(),
                 dto.getCompletionNotes(),
                 dto.getActualDurationHours(),
                 dto.getActualCost()
-        );
+        ));
 
         return ResponseEntity.ok(assembler.toModel(updated));
     }
@@ -165,7 +175,11 @@ public class MaintenanceRecordController {
             @PathVariable Long id,
             @Valid @RequestBody CancelMaintenanceRecordDTO dto) {
 
-        MaintenanceRecord updated = recordService.cancelRecord(id, dto.getVersion(), dto.getReason());
+        MaintenanceRecord updated = commandHandler.handle(new CancelMaintenanceCommand(
+                id,
+                dto.getVersion(),
+                dto.getReason()
+        ));
         return ResponseEntity.ok(assembler.toModel(updated));
     }
 

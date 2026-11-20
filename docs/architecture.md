@@ -36,7 +36,7 @@ The architectural decisions of the `aircraft-maintenance-service` are grounded i
 In monolithic systems, in-process method calls execute in shared memory with guaranteed delivery, sub-microsecond latency, and shared transactional contexts. Decomposing into microservices exposes the system to the 8 Fallacies of Distributed Computing:
 
 1. **The network is reliable:**
-   * *Mitigation:* Network calls between replicas and across services are treated as inherently prone to partition or packet loss. The `HttpPeerClient` configures strict connect and read timeouts (1500 ms). Unreachable peers trigger graceful degradation (`Optional.empty()`) and return semantic HTTP `404 Not Found` rather than hanging indefinitely.
+   * *Mitigation:* Network calls between replicas and across services are treated as inherently prone to partition or packet loss. The `HttpPeerClient` configures strict connect and read timeouts (1500 ms). Unreachable peers trigger graceful degradation rather than hanging indefinitely. Crucially, the system distinguishes **404 Not Found** (a definitive negative when all active replicas confirm non-existence) from **503 Service Unavailable** (uncertainty caused by an unreachable replica that might hold the resource, prompting the caller to retry with `Retry-After`).
 2. **Latency is zero:**
    * *Mitigation:* A **Local-First** query resolution policy ensures that queries for local resources execute with zero network hops (~2 ms). Remote peer hops are only incurred on local misses, with lineage recorded in the `X-Data-Source: peer` header.
 3. **Bandwidth is infinite:**
@@ -73,6 +73,7 @@ Following Coulouris, Dollimore, Kindberg & Blair (*Distributed Systems: Concepts
   * Instance 2: HTTP `:8091` | DB `:5434`
   * Instance 3: HTTP `:8101` | DB `:5437`
 * If any instance or its underlying database container crashes, the surviving replicas continue servicing traffic without downtime.
+* **Broker SPOF Nuance & Transactional Outbox Mitigation:** While application and database layers achieve Zero SPOF through component cloning and shared-nothing storage, a single-node RabbitMQ container in local development environments represents an infrastructural SPOF. The architecture mitigates this using the **Transactional Outbox Pattern**: domain transactions never depend synchronously on broker availability; events are saved in `outbox_events` and queued safely in the relational DB until the broker recovers, ensuring at-least-once delivery and zero phantom events. In enterprise production, this is solved via a 3-node RabbitMQ Cluster with Quorum Queues (Raft consensus).
 
 ---
 
@@ -151,8 +152,8 @@ The service implements a multi-layered fault tolerance framework based on the **
    * When a peer replica becomes unresponsive, `HttpPeerClient` terminates the TCP connection after `1500 ms` (`aircraft.peer-timeout-ms`). This prevents thread pool starvation (Tomcat worker thread exhaustion) and protects the calling instance from cascading latency spikes.
 2. **Health Check Probes (Failure Detectors):**
    * Exposes Spring Boot Actuator `/actuator/health` probes. Infrastructure orchestrators (Docker Compose, Kubernetes) continuously monitor container liveness and readiness, automatically isolating failing instances.
-3. **Graceful Degradation:**
-   * If peer replicas are unreachable during a query miss, the service degrades gracefully: instead of throwing a generic `500 Internal Server Error`, it logs a structured warning and returns `404 Not Found` with `X-Data-Source: local`, allowing calling services (e.g., `flight-operations-service`) to execute their compensating Saga workflows.
+3. **Graceful Degradation & Semantic Response Differentiation:**
+   * If peer replicas are unreachable during a query miss, the service degrades gracefully: instead of throwing a generic `500 Internal Server Error`, it logs a structured warning. The architecture distinguishes definitive absence (semantic `404 Not Found` when all cluster members respond affirmatively with miss) from partial cluster unreachable states (where critical orchestrators like `flight-operations-service` receive `503 Service Unavailable` with `Retry-After` to avoid false negative assumptions).
 
 ---
 
@@ -160,17 +161,25 @@ The service implements a multi-layered fault tolerance framework based on the **
 In accordance with the Assignment 2 specification, core domain resources managed by the service (aircraft fleet and maintenance interventions) adopt the **CQRS (Command-Query Responsibility Segregation)** pattern:
 
 * **Command Side (Write Model):**
-  * Captures business intent through explicit command objects (`RegisterAircraftCommand`, `UpdateAircraftStatusCommand`, `ScheduleMaintenanceCommand`, `StartMaintenanceCommand`, `CompleteMaintenanceCommand`, `CancelMaintenanceCommand`).
-  * Handled by dedicated Command Handlers (`AircraftCommandHandler`, `MaintenanceCommandHandler`).
+  * Controllers (`AircraftController`, `MaintenanceRecordController`) invoke **Command Handlers directly** (`AircraftCommandHandler`, `MaintenanceCommandHandler`), ensuring the full write path is governed by explicit commands (`RegisterAircraftCommand`, `UpdateAircraftStatusCommand`, `ScheduleMaintenanceCommand`, `StartMaintenanceCommand`, `CompleteMaintenanceCommand`, `CancelMaintenanceCommand`).
   * Validates domain invariants (e.g. status transition constraints, optimistic locking `@Version` checks) and updates relational aggregates in PostgreSQL / H2.
-  * Emits immutable domain events via `DomainEventPublisher` to RabbitMQ and the internal Spring event bus.
+  * Emits immutable domain events atomically within the database transaction using the **Transactional Outbox Pattern** (`outbox_events` table), preventing phantom events on rollback and eliminating message loss if RabbitMQ is offline.
 * **Query Side (Read Model / Projections):**
   * Decoupled from write-side entities. Designed specifically for fast, non-blocking queries and custom materialized views without complex relational joins.
-  * Read projections (such as `AircraftMoodProjection`) consume domain events reactively to update cached view representations (`AircraftMoodView`).
+  * Stored in an **independent, persistent database table** (`aircraft_mood_views`), ensuring mood projections survive application restarts.
+  * Read projections (`AircraftMoodProjection`) update views reactively when domain events occur.
   * Queries (`GetAircraftMoodQuery`) are dispatched to dedicated Query Handlers (`AircraftQueryHandler`).
 * **Consistency Model:**
   * Command execution guarantees strict local consistency (ACID) on the write aggregate.
   * Read projections are updated reactively with **Eventual Consistency**, ensuring the read side does not impede write throughput or hold locks on transactional tables.
+
+---
+
+### 2.11 Asynchronous Messaging Architecture (RabbitMQ / AMQP Topology)
+Inter-service integration is decoupled using RabbitMQ 3 with enterprise messaging patterns:
+* **Publish/Subscribe per Replica:** To avoid the competing-consumer pitfall of Work Queues where only one replica receives an event and discards it if the aircraft belongs to another shard, each replica binds its own queue (`aircraft.flight-events.<instance>`) to the exchange `aisafe.events`. All replicas receive `flight.completed` events, allowing each replica to process the flights belonging to its managed fleet.
+* **Binding Separation (Zero Loopback):** The replica queue binds **exclusively** to `flight.#`, preventing `aircraft.*` events published by the service from looping back into its own flight consumer.
+* **Dead Letter Exchange (DLX) & Retry Policy:** Queues configure `x-dead-letter-exchange: aisafe.dlx` with routing key `aircraft.events.dlq`. With listener retry capped at 3 attempts and exponential backoff, failing poison messages are rejected without infinite redelivery and parked safely in the DLQ for operator inspection.
 
 ---
 

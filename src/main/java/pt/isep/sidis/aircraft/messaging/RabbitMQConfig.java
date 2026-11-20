@@ -3,10 +3,7 @@ package pt.isep.sidis.aircraft.messaging;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -19,7 +16,8 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String EXCHANGE_NAME = "aisafe.events";
-    public static final String AIRCRAFT_QUEUE_NAME = "aircraft.events.queue";
+    public static final String DLX_NAME = "aisafe.dlx";
+    public static final String DLQ_NAME = "aircraft.events.dlq";
 
     public static final String ROUTING_KEY_AIRCRAFT_STATUS = "aircraft.status.changed";
     public static final String ROUTING_KEY_AIRCRAFT_CREATED = "aircraft.created";
@@ -32,13 +30,31 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue aircraftQueue(@Value("${aisafe.rabbitmq.aircraft-queue:" + AIRCRAFT_QUEUE_NAME + "}") String queueName) {
-        return new Queue(queueName, true);
+    public TopicExchange deadLetterExchange() {
+        return new TopicExchange(DLX_NAME, true, false);
     }
 
     @Bean
-    public Binding aircraftBinding(Queue aircraftQueue, TopicExchange aisafeExchange) {
-        return BindingBuilder.bind(aircraftQueue).to(aisafeExchange).with("aircraft.#");
+    public Queue deadLetterQueue() {
+        return QueueBuilder.durable(DLQ_NAME).build();
+    }
+
+    @Bean
+    public Binding deadLetterBinding(Queue deadLetterQueue, TopicExchange deadLetterExchange) {
+        return BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange).with("#");
+    }
+
+    /**
+     * Dedicated queue per replica instance (Publish/Subscribe pattern).
+     * Bound exclusively to flight.# events from flight-operations-service,
+     * avoiding self-loopback of aircraft.* events and preventing competing-consumer message loss.
+     */
+    @Bean
+    public Queue aircraftQueue(@Value("${aisafe.rabbitmq.aircraft-queue:aircraft.flight-events.${aircraft.instance-name:instance1}}") String queueName) {
+        return QueueBuilder.durable(queueName)
+                .withArgument("x-dead-letter-exchange", DLX_NAME)
+                .withArgument("x-dead-letter-routing-key", DLQ_NAME)
+                .build();
     }
 
     @Bean

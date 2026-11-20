@@ -10,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import pt.isep.sidis.aircraft.common.exceptions.ResourceNotFoundException;
+import pt.isep.sidis.aircraft.cqrs.commands.RegisterAircraftCommand;
+import pt.isep.sidis.aircraft.cqrs.handlers.AircraftCommandHandler;
 import pt.isep.sidis.aircraft.domain.Aircraft;
 import pt.isep.sidis.aircraft.domain.AircraftModel;
 import pt.isep.sidis.aircraft.domain.AircraftStatus;
@@ -35,6 +37,9 @@ class AircraftControllerTest {
 
     @MockBean
     private AircraftService aircraftService;
+
+    @MockBean
+    private AircraftCommandHandler commandHandler;
 
     @Test
     void unauthenticatedReturnsUnauthorized() throws Exception {
@@ -73,7 +78,7 @@ class AircraftControllerTest {
         AircraftModel model = new AircraftModel("737 MAX", "Boeing", 180, 26000, 6500, 840);
         Aircraft aircraft = new Aircraft("CS-TPB", model, LocalDate.now(), AircraftStatus.AVAILABLE);
 
-        when(aircraftService.createAircraft(any(Aircraft.class))).thenReturn(aircraft);
+        when(commandHandler.handle(any(RegisterAircraftCommand.class))).thenReturn(aircraft);
 
         mockMvc.perform(post("/api/aircrafts")
                         .contentType(MediaType.APPLICATION_JSON)

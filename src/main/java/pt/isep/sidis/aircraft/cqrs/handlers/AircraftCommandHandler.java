@@ -32,6 +32,13 @@ public class AircraftCommandHandler {
     @Transactional
     public Aircraft handle(RegisterAircraftCommand command) {
         AircraftModel model = modelRepository.findByName(command.modelCode())
+                .or(() -> {
+                    try {
+                        return modelRepository.findById(Long.parseLong(command.modelCode()));
+                    } catch (NumberFormatException | NullPointerException e) {
+                        return java.util.Optional.empty();
+                    }
+                })
                 .orElseThrow(() -> new ResourceNotFoundException("AircraftModel not found: " + command.modelCode()));
 
         Aircraft aircraft = new Aircraft(command.registration(), model, java.time.LocalDate.now(), AircraftStatus.AVAILABLE);

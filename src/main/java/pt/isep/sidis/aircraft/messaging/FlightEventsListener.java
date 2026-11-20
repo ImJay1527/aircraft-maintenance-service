@@ -15,7 +15,7 @@ import java.util.Optional;
 
 /**
  * AMQP Message Consumer for events arriving from flight-operations-service.
- * Demonstrates asynchronous inter-service integration via RabbitMQ.
+ * Demonstrates asynchronous inter-service integration via RabbitMQ with Pub/Sub queue per replica.
  */
 @Component
 public class FlightEventsListener {
@@ -30,19 +30,20 @@ public class FlightEventsListener {
         this.eventPublisher = eventPublisher;
     }
 
-    @RabbitListener(queues = "${aisafe.rabbitmq.aircraft-queue:" + RabbitMQConfig.AIRCRAFT_QUEUE_NAME + "}",
+    @RabbitListener(queues = "${aisafe.rabbitmq.aircraft-queue:aircraft.flight-events.${aircraft.instance-name:instance1}}",
                     autoStartup = "${aisafe.rabbitmq.listener.auto-startup:false}")
     @Transactional
     public void onFlightCompleted(FlightCompletedEvent event) {
+        String reg = event.aircraftRegistration();
         logger.info("Received AMQP FlightCompletedEvent: flight {} on aircraft {} (duration: {} hrs)",
-                event.flightNumber(), event.aircraftRegistration(), event.durationHours());
+                event.flightNumber(), reg, event.durationHours());
 
-        if (event.aircraftRegistration() == null || event.durationHours() == null || event.durationHours() <= 0) {
+        if (reg == null || reg.isBlank() || event.durationHours() == null || event.durationHours() <= 0) {
             logger.warn("Discarding invalid FlightCompletedEvent: {}", event);
             return;
         }
 
-        Optional<Aircraft> opt = aircraftRepository.findByRegistrationNumber(event.aircraftRegistration().toUpperCase());
+        Optional<Aircraft> opt = aircraftRepository.findByRegistrationNumber(reg.toUpperCase());
         if (opt.isPresent()) {
             Aircraft aircraft = opt.get();
             aircraft.addFlightHours(event.durationHours());
@@ -52,7 +53,7 @@ public class FlightEventsListener {
             }
             aircraftRepository.save(aircraft);
 
-            // Re-publish status changed event to update CQRS read projections
+            // Re-publish status changed event to update CQRS read projections and outbox
             eventPublisher.publishAircraftStatusChanged(new AircraftStatusChangedEvent(
                     aircraft.getRegistrationNumber(),
                     AircraftStatus.IN_FLIGHT.name(),
@@ -63,7 +64,7 @@ public class FlightEventsListener {
             logger.info("Updated aircraft {} total flight hours to {} after flight {}",
                     aircraft.getRegistrationNumber(), aircraft.getTotalFlightHours(), event.flightNumber());
         } else {
-            logger.debug("Aircraft {} not managed by this local instance shard; event ignored.", event.aircraftRegistration());
+            logger.debug("Aircraft {} not managed by this local instance shard; event ignored.", reg);
         }
     }
 }
