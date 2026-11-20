@@ -11,7 +11,7 @@
 
 Inter-service asynchronous communication in Assignment 2 is decoupled using a topic exchange pattern. Microservices publish domain events to the exchange `aisafe.events` with hierarchical routing keys.
 
-To prevent message loss caused by competing consumers across replicated instances, **Publish/Subscribe per replica** is enforced: each replica binds its own dedicated queue (`aircraft.flight-events.<instance>`) to `aisafe.events`.
+To prevent message loss caused by competing consumers across replicated instances, **Publish/Subscribe per replica** is enforced: each replica binds its own dedicated queue (`aircraft.events.<instance>`) to `aisafe.events`.
 
 ```text
                                +----------------------------------+
@@ -21,7 +21,7 @@ To prevent message loss caused by competing consumers across replicated instance
                flight.#         /     flight.#   |               \   flight.#
                                v                 v                v
                  +-------------------+ +-------------------+ +-------------------+
-                 | .flight-events.1  | | .flight-events.2  | | .flight-events.3  |
+                 | aircraft.events.1 | | aircraft.events.2 | | aircraft.events.3 |
                  |    (replica 1)    | |    (replica 2)    | |    (replica 3)    |
                  +-------------------+ +-------------------+ +-------------------+
                            |                     |                     |
@@ -154,7 +154,7 @@ All events include standard metadata (`eventId`, `eventType`, `occurredAt`) and 
 
 ## 3. Events Consumed by `aircraft-maintenance-service`
 
-Each replica binds its dedicated queue `aircraft.flight-events.${aircraft.instance-name:instance1}` with routing pattern `flight.#` to consume flight lifecycle events.
+Each replica binds its dedicated queue `aircraft.events.${aircraft.instance-name:instance1}` with routing pattern `flight.#` to consume flight lifecycle events.
 
 ### 3.1 `FlightCompletedEvent`
 * **Expected Routing Key**: `flight.completed`

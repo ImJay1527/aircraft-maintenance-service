@@ -50,7 +50,7 @@ public class RabbitMQConfig {
      * avoiding self-loopback of aircraft.* events and preventing competing-consumer message loss.
      */
     @Bean
-    public Queue aircraftQueue(@Value("${aisafe.rabbitmq.aircraft-queue:aircraft.flight-events.${aircraft.instance-name:instance1}}") String queueName) {
+    public Queue aircraftQueue(@Value("${aisafe.rabbitmq.aircraft-queue:aircraft.events.${aircraft.instance-name:instance1}}") String queueName) {
         return QueueBuilder.durable(queueName)
                 .withArgument("x-dead-letter-exchange", DLX_NAME)
                 .withArgument("x-dead-letter-routing-key", DLQ_NAME)

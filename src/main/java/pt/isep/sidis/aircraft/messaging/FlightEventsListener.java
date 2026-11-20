@@ -30,7 +30,7 @@ public class FlightEventsListener {
         this.eventPublisher = eventPublisher;
     }
 
-    @RabbitListener(queues = "${aisafe.rabbitmq.aircraft-queue:aircraft.flight-events.${aircraft.instance-name:instance1}}",
+    @RabbitListener(queues = "${aisafe.rabbitmq.aircraft-queue:aircraft.events.${aircraft.instance-name:instance1}}",
                     autoStartup = "${aisafe.rabbitmq.listener.auto-startup:false}")
     @Transactional
     public void onFlightCompleted(FlightCompletedEvent event) {
