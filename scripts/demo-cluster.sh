@@ -43,7 +43,7 @@ ADMIN_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOi
 echo -e "${BOLD}${BLUE}"
 echo "================================================================================"
 echo "    LETI-SIDIS 2026/2027 - AIRCRAFT & MAINTENANCE CLUSTER DEMONSTRATION         "
-echo "    Transversal: Component Cloning, P2P Unicast Forwarding & Zero SPOF          "
+echo "    Transversal: Component Cloning, P2P Unicast Forwarding & High Availability  "
 echo "================================================================================"
 echo -e "${RESET}"
 

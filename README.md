@@ -111,7 +111,7 @@ With instances running, execute the automated demonstration script to validate a
 ```bash
 ./mvnw clean test
 ```
-*Executes 163 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, Zero SPOF, peer forwarding, CQRS command/query handlers, RabbitMQ messaging & listeners, and the mandatory `/api/v2/unicorns` mood projection.*
+*Executes 164 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, high availability, peer forwarding, CQRS command/query handlers, RabbitMQ messaging & listeners, and the mandatory `/api/v2/unicorns` mood projection.*
 
 ### 3. Newman / Postman Collection
 ```bash

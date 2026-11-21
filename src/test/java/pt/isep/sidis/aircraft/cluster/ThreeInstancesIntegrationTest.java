@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   3. Forwarding from Instance 2 to Instance 3
  *   4. Reverse forwarding from Instance 3 to Instance 1 (CS-TPY)
  *   5. Distributed loop prevention across 3 nodes
- *   6. Zero SPOF: when Instance 2 crashes, Instance 1 and Instance 3 continue communicating seamlessly
+ *   6. Crash resilience (High Availability): when Instance 2 crashes, Instance 1 and Instance 3 continue communicating seamlessly
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ThreeInstancesIntegrationTest {

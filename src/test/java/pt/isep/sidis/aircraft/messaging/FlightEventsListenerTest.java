@@ -92,4 +92,34 @@ public class FlightEventsListenerTest {
         assertThat(mood.get().operationalStatus()).isEqualTo("UNDER_MAINTENANCE");
         assertThat(mood.get().mood()).isEqualTo("SLEEPY");
     }
+
+    @Test
+    void shouldNotAccumulateHoursTwiceWhenDuplicateFlightCompletedEventReceived() {
+        String reg = "CS-TPB";
+        Aircraft aircraft = aircraftRepository.findByRegistrationNumber(reg).orElseThrow();
+        Double initialHours = aircraft.getTotalFlightHours();
+
+        String duplicateEventId = "duplicate-flight-event-uuid-12345";
+        FlightCompletedEvent event = new FlightCompletedEvent(
+                duplicateEventId,
+                "FlightCompletedEvent",
+                java.time.Instant.now(),
+                100L,
+                "TP900",
+                reg,
+                "LIS",
+                "OPO",
+                2.0
+        );
+
+        // First delivery: should add 2.0 hours
+        listener.onFlightCompleted(event);
+        Aircraft updatedOnce = aircraftRepository.findByRegistrationNumber(reg).orElseThrow();
+        assertThat(updatedOnce.getTotalFlightHours()).isEqualTo(initialHours + 2.0);
+
+        // Second delivery (duplicate from broker redelivery): should be ignored by idempotent consumer
+        listener.onFlightCompleted(event);
+        Aircraft updatedTwice = aircraftRepository.findByRegistrationNumber(reg).orElseThrow();
+        assertThat(updatedTwice.getTotalFlightHours()).isEqualTo(initialHours + 2.0);
+    }
 }

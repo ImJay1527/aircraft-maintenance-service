@@ -102,7 +102,7 @@ flowchart TB
 
     Users[("Operators, Mechanics & Dispatchers<br/>[Person]")]:::person
 
-    subgraph AISafe["AISafe Distributed Architecture (Zero SPOF & Event-Driven)"]
+    subgraph AISafe["AISafe Distributed Architecture (High Availability & Event-Driven)"]
         subgraph AM_Cluster["aircraft-maintenance-service (This Component)"]
             am1["aircraft-1<br/>[Container: Spring Boot 3]<br/>Port :8081"]:::container
             am2["aircraft-2<br/>[Container: Spring Boot 3]<br/>Port :8091"]:::container

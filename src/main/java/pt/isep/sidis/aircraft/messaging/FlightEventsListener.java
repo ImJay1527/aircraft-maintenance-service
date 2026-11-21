@@ -32,15 +32,18 @@ public class FlightEventsListener {
     private final DomainEventPublisher eventPublisher;
     private final AircraftMoodProjection moodProjection;
     private final ObjectMapper objectMapper;
+    private final ProcessedEventRepository processedEventRepository;
 
     public FlightEventsListener(AircraftRepository aircraftRepository,
                                 DomainEventPublisher eventPublisher,
                                 AircraftMoodProjection moodProjection,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                ProcessedEventRepository processedEventRepository) {
         this.aircraftRepository = aircraftRepository;
         this.eventPublisher = eventPublisher;
         this.moodProjection = moodProjection;
         this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
     }
 
     @RabbitListener(queues = "${aisafe.rabbitmq.aircraft-queue:aircraft.events.${aircraft.instance-name:instance1}}",
@@ -55,6 +58,20 @@ public class FlightEventsListener {
         try {
             if ("flight.completed".equalsIgnoreCase(routingKey)) {
                 FlightCompletedEvent event = objectMapper.readValue(message.getBody(), FlightCompletedEvent.class);
+                if ((event.eventId() == null || event.eventId().isBlank()) && message.getMessageProperties().getHeaders().containsKey("eventId")) {
+                    String headerEventId = String.valueOf(message.getMessageProperties().getHeaders().get("eventId"));
+                    event = new FlightCompletedEvent(
+                            headerEventId,
+                            event.eventType(),
+                            event.occurredAt(),
+                            event.flightId(),
+                            event.flightNumber(),
+                            event.aircraftRegistration(),
+                            event.originAirportIata(),
+                            event.destinationAirportIata(),
+                            event.durationHours()
+                    );
+                }
                 onFlightCompleted(event);
             } else if (routingKey.startsWith("flight.")) {
                 // Ignore flight.scheduled, flight.cancelled, etc. cleanly without warning
@@ -96,6 +113,20 @@ public class FlightEventsListener {
         if (reg == null || reg.isBlank() || event.durationHours() == null || event.durationHours() <= 0) {
             logger.debug("Discarding invalid FlightCompletedEvent: {}", event);
             return;
+        }
+
+        // Idempotent consumer: prevent double counting flight hours on duplicated redeliveries
+        String eventId = event.eventId();
+        if (eventId != null && !eventId.isBlank()) {
+            if (processedEventRepository.existsByEventId(eventId)) {
+                logger.info("Discarding duplicate FlightCompletedEvent with eventId [{}] (idempotent consumer)", eventId);
+                return;
+            }
+            processedEventRepository.save(new ProcessedEvent(
+                    eventId,
+                    event.eventType() != null ? event.eventType() : "FlightCompletedEvent",
+                    java.time.Instant.now()
+            ));
         }
 
         Optional<Aircraft> opt = aircraftRepository.findByRegistrationNumber(reg.toUpperCase());
