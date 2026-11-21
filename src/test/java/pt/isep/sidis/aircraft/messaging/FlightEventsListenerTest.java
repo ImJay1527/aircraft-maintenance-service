@@ -70,7 +70,7 @@ public class FlightEventsListenerTest {
     }
 
     @Test
-    void shouldSynchronizeMoodProjectionWhenAircraftEventArrivesFromBroker() {
+    void shouldSynchronizeMoodProjectionWhenAircraftEventArrivesFromBroker() throws Exception {
         String json = """
                 {
                     "eventId": "test-broker-event",

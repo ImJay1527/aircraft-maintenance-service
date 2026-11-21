@@ -47,7 +47,7 @@ public class FlightEventsListener {
                     autoStartup = "${aisafe.rabbitmq.listener.auto-startup:false}")
     @Transactional
     public void onAmqpMessage(Message message,
-                              @Header(name = AmqpHeaders.RECEIVED_ROUTING_KEY, required = false) String routingKey) {
+                              @Header(name = AmqpHeaders.RECEIVED_ROUTING_KEY, required = false) String routingKey) throws Exception {
         if (routingKey == null) {
             routingKey = "";
         }
@@ -78,8 +78,12 @@ public class FlightEventsListener {
             } else {
                 logger.debug("Ignoring unhandled AMQP routing key: {}", routingKey);
             }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            logger.error("Rejecting poisoned AMQP message (unparseable payload) for routing key [{}]: {}", routingKey, e.getMessage());
+            throw new org.springframework.amqp.AmqpRejectAndDontRequeueException("Poison message unparseable for routing key: " + routingKey, e);
         } catch (Exception e) {
             logger.warn("Failed to process AMQP message with routing key [{}]: {}", routingKey, e.getMessage());
+            throw e;
         }
     }
 
