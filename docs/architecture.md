@@ -3,7 +3,7 @@
 **Professor**: Orlando Sousa  
 **Student**: André (1240567)  
 **Assigned Service**: `aircraft-maintenance-service`  
-**Transversal Responsibility**: Component Cloning, Active Replication, P2P Unicast Query Forwarding & Zero SPOF  
+**Transversal Responsibility**: Component Cloning, Active Replication, P2P Unicast Query Forwarding & Fault Tolerance  
 
 **Contents:** [1. Executive Summary](#1-executive-summary--domain-driven-segregation) · [2. Theoretical Foundations](#2-theoretical-foundations-of-distributed-systems) · [3. FURPS+ Quality](#3-architectural-drivers-furps--isoiec-25010-quality-model) · [4. ADRs](#4-key-architectural-decision-records-adrs) · [5. C4+1 Views](#5-c41-architectural-views) · [6. Performance & Latency](#6-performance--latency-model) · [7. Security & TLS 1.3](#7-security-architecture--rbac-matrix) · [8. Verification](#8-verification--empirical-validation)
 
@@ -65,10 +65,10 @@ The CAP theorem states that under a network partition ($P$), a distributed syste
 
 ---
 
-### 2.3 Replication Strategy: Active Component Cloning (Zero SPOF)
+### 2.3 Replication Strategy: Active Component Cloning & High Availability
 Following Coulouris, Dollimore, Kindberg & Blair (*Distributed Systems: Concepts and Design*):
 * **Component Cloning:** Rather than relying on a fragile Primary-Backup (Passive) replication model that introduces failover election delays and master node SPOFs, the service adopts **Active Multi-Instance Component Cloning**.
-* **Zero Single Point of Failure (Zero SPOF):** Multiple instance replicas (`aircraft-1`, `aircraft-2`, `aircraft-3`) run concurrently. Each replica binds to its own isolated database process:
+* **High Availability & Fault Tolerance:** Multiple instance replicas (`aircraft-1`, `aircraft-2`, `aircraft-3`) run concurrently. Each replica binds to its own isolated database process:
   * Instance 1: HTTP `:8081` | DB `:5431`
   * Instance 2: HTTP `:8091` | DB `:5434`
   * Instance 3: HTTP `:8101` | DB `:5437`
@@ -223,7 +223,7 @@ The Assignment 2 specification mandates a mock endpoint returning the mood statu
 * **Decision:** All inter-service and peer communications use synchronous HTTP/REST commands with explicit timeout and error propagation semantics.
 * **Consequence:** Distributed transactions and airworthiness checks must be coordinated via synchronous queries and orchestrator-driven Sagas with compensating actions.
 
-### ADR-2: Active Component Cloning with Isolated Databases (Zero SPOF)
+### ADR-2: Active Component Cloning with Isolated Databases (High Availability & Fault Tolerance)
 * **Status:** Accepted.
 * **Context:** A shared central database represents a Single Point of Failure and a scalability bottleneck violating microservice autonomy.
 * **Decision:** Deploy multiple identical application instances (`aircraft-1`, `aircraft-2`), each coupled exclusively to its own persistent database. Data may be sharded or replicated across instances.

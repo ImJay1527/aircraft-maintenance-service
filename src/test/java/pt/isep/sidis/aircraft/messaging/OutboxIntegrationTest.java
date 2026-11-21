@@ -42,7 +42,7 @@ public class OutboxIntegrationTest {
         OutboxEvent last = all.get(all.size() - 1);
         assertThat(last.getRoutingKey()).isEqualTo(RabbitMQConfig.ROUTING_KEY_AIRCRAFT_STATUS);
         assertThat(last.getPayload()).contains("CS-TPA");
-        assertThat(last.getStatus()).isIn("PENDING", "PUBLISHED");
+        assertThat(last.getStatus()).isEqualTo("PENDING");
     }
 
     @Test

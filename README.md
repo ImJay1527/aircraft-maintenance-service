@@ -21,8 +21,8 @@ Decomposed from the monolithic PSOFT legacy application using **Domain-Driven De
 
 The system architecture is grounded in foundational distributed systems theory:
 
-1. **Active Component Cloning (Zero SPOF):**
-   * Eliminates Single Points of Failure through active multi-instance replication (`aircraft-1`, `aircraft-2`, `aircraft-3`).
+1. **Active Component Cloning & High Availability:**
+   * Eliminates Single Points of Failure at the application and database tiers through active multi-instance replication (`aircraft-1`, `aircraft-2`, `aircraft-3`).
    * Adheres strictly to the **Database-per-Service** pattern: each instance is backed by its own isolated database schema (H2 or dedicated PostgreSQL container), ensuring that failure of an instance or its database container does not compromise the availability of surviving replicas.
 2. **CAP Theorem (AP) & PACELC (PA/EL):**
    * Prioritizes **Availability** and **Partition Tolerance** ($AP$) over immediate linearizable consistency, as air traffic queries must remain non-blocking even during network degradation.

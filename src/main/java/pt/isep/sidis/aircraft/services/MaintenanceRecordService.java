@@ -9,10 +9,6 @@ import pt.isep.sidis.aircraft.domain.AircraftStatus;
 import pt.isep.sidis.aircraft.domain.MaintenanceComponent;
 import pt.isep.sidis.aircraft.domain.MaintenanceRecord;
 import pt.isep.sidis.aircraft.domain.MaintenanceTemplate;
-import pt.isep.sidis.aircraft.messaging.DomainEventPublisher;
-import pt.isep.sidis.aircraft.messaging.events.AircraftStatusChangedEvent;
-import pt.isep.sidis.aircraft.messaging.events.MaintenanceCompletedEvent;
-import pt.isep.sidis.aircraft.messaging.events.MaintenanceScheduledEvent;
 import pt.isep.sidis.aircraft.repositories.AircraftRepository;
 import pt.isep.sidis.aircraft.repositories.MaintenanceRecordRepository;
 import pt.isep.sidis.aircraft.repositories.MaintenanceTemplateRepository;
@@ -26,16 +22,13 @@ public class MaintenanceRecordService {
     private final MaintenanceRecordRepository recordRepository;
     private final MaintenanceTemplateRepository templateRepository;
     private final AircraftRepository aircraftRepository;
-    private final DomainEventPublisher eventPublisher;
 
     public MaintenanceRecordService(MaintenanceRecordRepository recordRepository,
                                     MaintenanceTemplateRepository templateRepository,
-                                    AircraftRepository aircraftRepository,
-                                    DomainEventPublisher eventPublisher) {
+                                    AircraftRepository aircraftRepository) {
         this.recordRepository = recordRepository;
         this.templateRepository = templateRepository;
         this.aircraftRepository = aircraftRepository;
-        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -73,27 +66,7 @@ public class MaintenanceRecordService {
         aircraft.updateStatus(AircraftStatus.UNDER_MAINTENANCE);
         aircraftRepository.save(aircraft);
 
-        MaintenanceRecord saved = recordRepository.save(record);
-
-        eventPublisher.publishMaintenanceScheduled(new MaintenanceScheduledEvent(
-                saved.getId(),
-                registrationNumber.toUpperCase(),
-                templateId,
-                description,
-                startDate,
-                expectedDurationHours,
-                component.name(),
-                estimatedCost
-        ));
-
-        eventPublisher.publishAircraftStatusChanged(new AircraftStatusChangedEvent(
-                registrationNumber.toUpperCase(),
-                AircraftStatus.AVAILABLE.name(),
-                AircraftStatus.UNDER_MAINTENANCE.name(),
-                aircraft.getTotalFlightHours()
-        ));
-
-        return saved;
+        return recordRepository.save(record);
     }
 
     @Transactional(readOnly = true)
@@ -135,24 +108,7 @@ public class MaintenanceRecordService {
         aircraft.updateStatus(AircraftStatus.AVAILABLE);
         aircraftRepository.save(aircraft);
 
-        MaintenanceRecord saved = recordRepository.save(record);
-
-        eventPublisher.publishMaintenanceCompleted(new MaintenanceCompletedEvent(
-                saved.getId(),
-                aircraft.getRegistrationNumber(),
-                actualDurationHours,
-                actualCost,
-                completionNotes
-        ));
-
-        eventPublisher.publishAircraftStatusChanged(new AircraftStatusChangedEvent(
-                aircraft.getRegistrationNumber(),
-                AircraftStatus.UNDER_MAINTENANCE.name(),
-                AircraftStatus.AVAILABLE.name(),
-                aircraft.getTotalFlightHours()
-        ));
-
-        return saved;
+        return recordRepository.save(record);
     }
 
     @Transactional
@@ -181,16 +137,7 @@ public class MaintenanceRecordService {
         aircraft.updateStatus(AircraftStatus.AVAILABLE);
         aircraftRepository.save(aircraft);
 
-        MaintenanceRecord saved = recordRepository.save(record);
-
-        eventPublisher.publishAircraftStatusChanged(new AircraftStatusChangedEvent(
-                aircraft.getRegistrationNumber(),
-                AircraftStatus.UNDER_MAINTENANCE.name(),
-                AircraftStatus.AVAILABLE.name(),
-                aircraft.getTotalFlightHours()
-        ));
-
-        return saved;
+        return recordRepository.save(record);
     }
 
     @Transactional(readOnly = true)

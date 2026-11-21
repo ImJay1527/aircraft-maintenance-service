@@ -41,25 +41,31 @@ public class RabbitMQConfig {
 
     @Bean
     public Binding deadLetterBinding(Queue deadLetterQueue, TopicExchange deadLetterExchange) {
-        return BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange).with("#");
+        return BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange).with(DLQ_NAME);
     }
 
     /**
      * Dedicated queue per replica instance (Publish/Subscribe pattern).
-     * Bound exclusively to flight.# events from flight-operations-service,
-     * avoiding self-loopback of aircraft.* events and preventing competing-consumer message loss.
+     * Bound to flight.# events from flight-operations-service and aircraft.# events from peer replicas.
      */
     @Bean
     public Queue aircraftQueue(@Value("${aisafe.rabbitmq.aircraft-queue:aircraft.events.${aircraft.instance-name:instance1}}") String queueName) {
         return QueueBuilder.durable(queueName)
                 .withArgument("x-dead-letter-exchange", DLX_NAME)
                 .withArgument("x-dead-letter-routing-key", DLQ_NAME)
+                .withArgument("x-max-length", 1000)
+                .withArgument("x-message-ttl", 86400000)
                 .build();
     }
 
     @Bean
     public Binding flightOpsBinding(Queue aircraftQueue, TopicExchange aisafeExchange) {
         return BindingBuilder.bind(aircraftQueue).to(aisafeExchange).with("flight.#");
+    }
+
+    @Bean
+    public Binding aircraftEventsBinding(Queue aircraftQueue, TopicExchange aisafeExchange) {
+        return BindingBuilder.bind(aircraftQueue).to(aisafeExchange).with("aircraft.#");
     }
 
     @Bean

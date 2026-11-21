@@ -26,11 +26,15 @@ public class AircraftService {
     public Aircraft createAircraft(Aircraft aircraft) {
         Aircraft saved = aircraftRepository.save(aircraft);
         if (saved.getModel() != null) {
+            String fullModelName = saved.getModel().getManufacturer() != null && !saved.getModel().getManufacturer().isBlank()
+                    ? saved.getModel().getManufacturer() + " " + saved.getModel().getName()
+                    : saved.getModel().getName();
+
             eventPublisher.publishAircraftCreated(new AircraftCreatedEvent(
                     saved.getRegistrationNumber(),
                     saved.getRegistrationNumber(),
                     saved.getModel().getName(),
-                    saved.getModel().getManufacturer(),
+                    fullModelName,
                     (double) saved.getModel().getMaximumRange(),
                     (double) saved.getModel().getFuelCapacity(),
                     saved.getModel().getSeatingCapacity()

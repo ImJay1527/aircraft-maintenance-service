@@ -45,11 +45,15 @@ public class AircraftCommandHandler {
         Aircraft saved = aircraftRepository.save(aircraft);
 
         // Publish domain event to broker & local projections
+        String fullModelName = model.getManufacturer() != null && !model.getManufacturer().isBlank()
+                ? model.getManufacturer() + " " + model.getName()
+                : model.getName();
+
         eventPublisher.publishAircraftCreated(new AircraftCreatedEvent(
                 saved.getRegistrationNumber(),
                 command.serialNumber(),
                 model.getName(),
-                model.getManufacturer(),
+                fullModelName,
                 (double) model.getMaximumRange(),
                 (double) model.getFuelCapacity(),
                 model.getSeatingCapacity()

@@ -55,4 +55,41 @@ public class FlightEventsListenerTest {
         listener.onFlightCompleted(new FlightCompletedEvent("TP999", "CS-UNKNOWN-SHARD", 4.0));
         // Assert: No exception thrown, handled cleanly
     }
+
+    @Test
+    void shouldCleanlyIgnoreNonCompletedFlightEventsViaAmqpMessage() {
+        org.springframework.amqp.core.Message msg = org.springframework.amqp.core.MessageBuilder
+                .withBody("{\"flightNumber\":\"TP101\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .build();
+
+        // Should not throw and should cleanly ignore
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                listener.onAmqpMessage(msg, "flight.scheduled"));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                listener.onAmqpMessage(msg, "flight.cancelled"));
+    }
+
+    @Test
+    void shouldSynchronizeMoodProjectionWhenAircraftEventArrivesFromBroker() {
+        String json = """
+                {
+                    "eventId": "test-broker-event",
+                    "eventType": "AircraftStatusChangedEvent",
+                    "registration": "CS-TPA",
+                    "previousStatus": "AVAILABLE",
+                    "newStatus": "UNDER_MAINTENANCE",
+                    "totalFlightHours": 1500.0
+                }
+                """;
+        org.springframework.amqp.core.Message msg = org.springframework.amqp.core.MessageBuilder
+                .withBody(json.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .build();
+
+        listener.onAmqpMessage(msg, "aircraft.status.changed");
+
+        Optional<AircraftMoodView> mood = moodProjection.findByRegistration("CS-TPA");
+        assertThat(mood).isPresent();
+        assertThat(mood.get().operationalStatus()).isEqualTo("UNDER_MAINTENANCE");
+        assertThat(mood.get().mood()).isEqualTo("SLEEPY");
+    }
 }

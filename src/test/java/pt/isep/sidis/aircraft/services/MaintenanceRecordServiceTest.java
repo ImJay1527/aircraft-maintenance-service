@@ -41,9 +41,6 @@ class MaintenanceRecordServiceTest {
     @Mock
     private AircraftRepository aircraftRepository;
 
-    @Mock
-    private DomainEventPublisher eventPublisher;
-
     @InjectMocks
     private MaintenanceRecordService service;
 
