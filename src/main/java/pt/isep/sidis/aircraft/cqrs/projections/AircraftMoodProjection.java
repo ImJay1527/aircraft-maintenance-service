@@ -87,35 +87,39 @@ public class AircraftMoodProjection {
     @Transactional
     public void onMaintenanceScheduled(MaintenanceScheduledEvent event) {
         String reg = event.registration().toUpperCase();
-        Optional<AircraftMoodEntity> existingOpt = moodRepository.findById(reg);
-        if (existingOpt.isPresent()) {
-            AircraftMoodEntity existing = existingOpt.get();
-            existing.setMood("ANTICIPATING");
-            existing.setEnergyLevel(75);
-            existing.setSparkleFactor(4.0);
-            existing.setStatusMessage("Looking forward to a spa day at maintenance on " + event.scheduledDate());
-            existing.setLastUpdated(Instant.now());
-            moodRepository.save(existing);
-            logger.info("Projected ANTICIPATING mood for aircraft {} scheduled on {}", reg, event.scheduledDate());
-        }
+        AircraftMoodEntity existing = moodRepository.findById(reg).orElseGet(() -> {
+            String model = aircraftRepository.findByRegistrationNumber(reg)
+                    .map(a -> a.getModel() != null ? a.getModel().getName() : "Unknown")
+                    .orElse("Unknown");
+            return new AircraftMoodEntity(reg, model, "ANTICIPATING", 75, 4.0, "", "AVAILABLE", 0.0, Instant.now());
+        });
+        existing.setMood("ANTICIPATING");
+        existing.setEnergyLevel(75);
+        existing.setSparkleFactor(4.0);
+        existing.setStatusMessage("Looking forward to a spa day at maintenance on " + event.scheduledDate());
+        existing.setLastUpdated(Instant.now());
+        moodRepository.save(existing);
+        logger.info("Projected ANTICIPATING mood for aircraft {} scheduled on {}", reg, event.scheduledDate());
     }
 
     @EventListener
     @Transactional
     public void onMaintenanceCompleted(MaintenanceCompletedEvent event) {
         String reg = event.registration().toUpperCase();
-        Optional<AircraftMoodEntity> existingOpt = moodRepository.findById(reg);
-        if (existingOpt.isPresent()) {
-            AircraftMoodEntity existing = existingOpt.get();
-            existing.setMood("REJUVENATED");
-            existing.setEnergyLevel(100);
-            existing.setSparkleFactor(5.0);
-            existing.setStatusMessage("Fresh out of maintenance! Engines humming happily. " + event.completionDetails());
-            existing.setOperationalStatus("AVAILABLE");
-            existing.setLastUpdated(Instant.now());
-            moodRepository.save(existing);
-            logger.info("Projected REJUVENATED mood for aircraft {}", reg);
-        }
+        AircraftMoodEntity existing = moodRepository.findById(reg).orElseGet(() -> {
+            String model = aircraftRepository.findByRegistrationNumber(reg)
+                    .map(a -> a.getModel() != null ? a.getModel().getName() : "Unknown")
+                    .orElse("Unknown");
+            return new AircraftMoodEntity(reg, model, "REJUVENATED", 100, 5.0, "", "AVAILABLE", 0.0, Instant.now());
+        });
+        existing.setMood("REJUVENATED");
+        existing.setEnergyLevel(100);
+        existing.setSparkleFactor(5.0);
+        existing.setStatusMessage("Fresh out of maintenance! Engines humming happily. " + event.completionDetails());
+        existing.setOperationalStatus("AVAILABLE");
+        existing.setLastUpdated(Instant.now());
+        moodRepository.save(existing);
+        logger.info("Projected REJUVENATED mood for aircraft {}", reg);
     }
 
     @Transactional(readOnly = true)
