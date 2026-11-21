@@ -73,7 +73,7 @@ Following Coulouris, Dollimore, Kindberg & Blair (*Distributed Systems: Concepts
   * Instance 2: HTTP `:8091` | DB `:5434`
   * Instance 3: HTTP `:8101` | DB `:5437`
 * If any instance or its underlying database container crashes, the surviving replicas continue servicing traffic without downtime.
-* **Broker SPOF Nuance & Transactional Outbox Mitigation:** While application and database layers achieve Zero SPOF through component cloning and shared-nothing storage, a single-node RabbitMQ container in local development environments represents an infrastructural SPOF. The architecture mitigates this using the **Transactional Outbox Pattern**: domain transactions never depend synchronously on broker availability; events are saved in `outbox_events` and queued safely in the relational DB until the broker recovers, ensuring at-least-once delivery and zero phantom events. In enterprise production, this is solved via a 3-node RabbitMQ Cluster with Quorum Queues (Raft consensus).
+* **Broker Single Point of Failure (SPOF) Nuance & Transactional Outbox Mitigation:** While the service achieves high availability without a single point of failure across the service instances (3 copies, each with its own isolated database), a single-node RabbitMQ container in local development environments represents an infrastructural single point of failure. The architecture mitigates this using the **Transactional Outbox Pattern**: domain transactions never depend synchronously on broker availability; events are saved in `outbox_events` and queued safely in the relational DB until the broker recovers, ensuring at-least-once delivery and zero phantom events. In enterprise production, this is solved via a 3-node RabbitMQ Cluster with Quorum Queues (Raft consensus).
 
 ---
 

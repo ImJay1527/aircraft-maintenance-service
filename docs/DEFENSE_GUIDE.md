@@ -35,7 +35,7 @@ O professor pergunta com frequência: *"Porque dividiram o sistema desta forma? 
 O professor perguntará: *"Se um servidor ou base de dados for abaixo, o sistema para? Onde está o vosso SPOF? E o RabbitMQ?"*
 
 ### A Resposta:
-> *"A nível aplicacional e de dados, temos **Zero SPOF** graças à replicação multi-instância e isolamento de base de dados por réplica. Ao nível da mensageria assíncrona, reconhecemos que um único container RabbitMQ seria um SPOF de infraestrutura, pelo que implementámos o padrão **Transactional Outbox** para garantir resiliência absoluta."*
+> *"Não existe ponto único de falha nas instâncias do serviço (3 cópias, cada uma com a sua base de dados isolada). Ao nível da mensageria assíncrona, reconhecemos que um único container RabbitMQ representa um ponto único de falha de infraestrutura no ambiente local, pelo que implementámos o padrão **Transactional Outbox** para desacoplar as transações da disponibilidade do broker e garantir resiliência."*
 
 1. **Armazenamento Descentralizado:**
    - Cada réplica do microsserviço tem a sua própria base de dados independente (H2 ou PostgreSQL). Se a Réplica 1 for abaixo, as Réplicas 2 e 3 continuam a operar sem qualquer interrupção.

@@ -184,7 +184,7 @@ class ThreeInstancesIntegrationTest {
 
     @Test
     @Order(6)
-    void zeroSpofWhenInstance2CrashesInstance1AndInstance3StillCommunicate() {
+    void highAvailabilityWhenInstance2CrashesInstance1AndInstance3StillCommunicate() {
         // Simulate catastrophic failure of instance2
         instance2.close();
 
