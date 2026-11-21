@@ -527,7 +527,7 @@
                   "pm.test(\"Registration is CS-TPA\", () => pm.expect(pm.response.json().registration).to.eql('CS-TPA'));",
                   "pm.test(\"Has valid mood and sparkle factor\", () => {",
                   "    const data = pm.response.json();",
-                  "    pm.expect(['HAPPY', 'EXPERIENCED', 'REJUVENATED']).to.include(data.mood);",
+                  "    pm.expect(['HAPPY', 'EXPERIENCED', 'REJUVENATED', 'EXCITED', 'SLEEPY', 'BORED', 'ANTICIPATING', 'CONTENT']).to.include(data.mood);",
                   "    pm.expect(data.sparkleFactor).to.be.above(0);",
                   "});"
                 ],

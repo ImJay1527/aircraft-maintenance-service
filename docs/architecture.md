@@ -217,11 +217,11 @@ The Assignment 2 specification mandates a mock endpoint returning the mood statu
 
 ## 4. Key Architectural Decision Records (ADRs)
 
-### ADR-1: Synchronous HTTP/REST Commands Only (No Message Queues)
-* **Status:** Accepted (Mandated by SIDIS Project Specification).
-* **Context:** Enterprise microservices often use asynchronous brokers (Kafka, RabbitMQ). SIDIS Assignment 1 explicitly forbids asynchronous message brokers to focus on distributed consistency and fault tolerance over HTTP.
-* **Decision:** All inter-service and peer communications use synchronous HTTP/REST commands with explicit timeout and error propagation semantics.
-* **Consequence:** Distributed transactions and airworthiness checks must be coordinated via synchronous queries and orchestrator-driven Sagas with compensating actions.
+### ADR-1: Synchronous HTTP/REST Commands & APIs (Assignment 1 Baseline)
+* **Status:** Accepted for external client APIs and peer queries. Superseded in Assignment 2 by ADR-7 for inter-service domain event broadcasting.
+* **Context:** Enterprise microservices often use asynchronous brokers (Kafka, RabbitMQ). SIDIS Assignment 1 explicitly focused on distributed consistency, replication, and fault tolerance over synchronous HTTP REST.
+* **Decision:** All external client interactions and direct point-to-point queries use synchronous HTTP/REST with explicit timeout and error propagation semantics.
+* **Consequence:** Clean, standard RESTful contracts with OpenAPI documentation; low cognitive load for client integrations.
 
 ### ADR-2: Active Component Cloning with Isolated Databases (High Availability & Fault Tolerance)
 * **Status:** Accepted.
@@ -258,6 +258,12 @@ The Assignment 2 specification mandates a mock endpoint returning the mood statu
 * **Context:** Purely synchronous HTTP communication between services introduces tight temporal coupling, cascading latency, and reduced resilience during network partitions.
 * **Decision:** Introduce a message broker (RabbitMQ `3-management`) with a Topic Exchange (`aisafe.events`). State mutations in `aircraft-maintenance-service` emit domain events (`aircraft.status.changed`, `aircraft.created`, `aircraft.maintenance.completed`) published to the broker for asynchronous consumption by `flight-operations-service`. External client endpoints remain HTTP REST.
 * **Consequence:** Decoupled inter-service integration, asynchronous broadcast capability, and improved partition tolerance under CAP/PACELC models.
+
+### ADR-8: Resilient Transactional Outbox Pattern with Publisher Confirms
+* **Status:** Accepted (Mandated for Assignment 2 Distributed Consistency).
+* **Context:** Publishing directly to a message broker during a database transaction risks two critical distributed anomalies: (1) phantom events emitted if the database rolls back, and (2) message loss if the broker is unreachable.
+* **Decision:** Implement the Transactional Outbox Pattern. Domain events are atomically enqueued in an `outbox_events` table within the same business transaction. An asynchronous `OutboxDispatcher` uses simple publisher confirms (`waitForConfirmsOrDie(5000)`) to dispatch events to RabbitMQ and deletes confirmed rows.
+* **Consequence:** Guaranteed at-least-once delivery, zero phantom events on database rollback, bounded table size, and resilience against transient broker outages without dual-write inconsistencies.
 
 ---
 
