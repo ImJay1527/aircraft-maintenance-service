@@ -140,7 +140,8 @@ O professor perguntará: *"Porque usam RabbitMQ e como comunicam os serviços en
 > *Configurámos uma Topic Exchange chamada `aisafe.events`. Sempre que o estado de uma aeronave muda no nosso serviço (ex: entra em manutenção ou é concluída uma revisão), publicamos um evento assíncrono com a routing key apropriada (`aircraft.status.changed`, `aircraft.maintenance.completed`). O `flight-operations-service` subscreve estes eventos para saber em tempo real que o avião está indisponível para voos, sem necessidade de fazer polling contínuo via HTTP.*
 > 
 > *Implementámos quatro pilares de resiliência recomendados pelas boas práticas de sistemas distribuídos:
-> 1. **Publish/Subscribe por réplica:** Fila dedicada por réplica (`aircraft.flight-events.<instance>`), garantindo que todas as instâncias recebem os eventos de voo e a réplica dona da aeronave os processa, eliminando o problema de perda de dados de Work Queues.
-> 2. **Prevenção de Loopback:** Fila ligada exclusivamente a `flight.#`, impedindo que os eventos de aeronave voltem para o próprio consumidor.
-> 3. **Dead Letter Exchange (DLX) e Dead Letter Queue (DLQ):** Exchange `aisafe.dlx` e fila `aircraft.events.dlq`. Com retry configurado para 3 tentativas e `requeue=false`, mensagens que falham não ficam em loop infinito.
-> 4. **Transactional Outbox Pattern:** Garante envio fiável 'at-least-once' e elimina 'phantom events' em caso de rollback."*
+> 1. **Publish/Subscribe por réplica:** Fila dedicada por réplica (`aircraft.events.<instance>`), garantindo que todas as instâncias recebem os eventos de voo (`flight.#`) e eventos de aeronave (`aircraft.#`) para sincronização da projeção CQRS de humores entre réplicas.
+> 2. **Isolamento de DLX e DLQ:** Exchange `aisafe.dlx` e fila `aircraft.events.dlq`, com routing key explícita `aircraft.events.dlq` (não poluída com mensagens de outros serviços).
+> 3. **Tratamento de Envenenamento e Retries:** Mensagens com JSON inválido são rejeitadas de imediato para a DLQ (`AmqpRejectAndDontRequeueException`). Falhas transitórias beneficiam de 3 retentativas automáticas antes de caírem na DLQ.
+> 4. **Consumo Idempotente:** Registo atómico de `eventId` na tabela `processed_events`, impedindo acumulação duplicada de horas de voo em caso de redelivery.
+> 5. **Transactional Outbox Pattern:** Garante envio fiável 'at-least-once' e elimina 'phantom events' em caso de rollback."*

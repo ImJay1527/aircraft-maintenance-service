@@ -177,9 +177,9 @@ In accordance with the Assignment 2 specification, core domain resources managed
 
 ### 2.11 Asynchronous Messaging Architecture (RabbitMQ / AMQP Topology)
 Inter-service integration is decoupled using RabbitMQ 3 with enterprise messaging patterns:
-* **Publish/Subscribe per Replica:** To avoid the competing-consumer pitfall of Work Queues where only one replica receives an event and discards it if the aircraft belongs to another shard, each replica binds its own queue (`aircraft.flight-events.<instance>`) to the exchange `aisafe.events`. All replicas receive `flight.completed` events, allowing each replica to process the flights belonging to its managed fleet.
-* **Binding Separation (Zero Loopback):** The replica queue binds **exclusively** to `flight.#`, preventing `aircraft.*` events published by the service from looping back into its own flight consumer.
-* **Dead Letter Exchange (DLX) & Retry Policy:** Queues configure `x-dead-letter-exchange: aisafe.dlx` with routing key `aircraft.events.dlq`. With listener retry capped at 3 attempts and exponential backoff, failing poison messages are rejected without infinite redelivery and parked safely in the DLQ for operator inspection.
+* **Publish/Subscribe per Replica:** To avoid the competing-consumer pitfall of Work Queues where only one replica receives an event and discards it if the aircraft belongs to another shard, each replica binds its own dedicated queue (`aircraft.events.<instance>`) to the exchange `aisafe.events`.
+* **Binding Topologies (`flight.#` & `aircraft.#`):** The replica queue binds to `flight.#` to consume flight completion events and update aircraft flight hours, and binds to `aircraft.#` to synchronize CQRS mood projections across replicas when peer instances register aircraft or execute maintenance.
+* **Dead Letter Exchange (DLX) & Retry Policy:** Queues configure `x-dead-letter-exchange: aisafe.dlx` with routing key `aircraft.events.dlq` (isolated to prevent receiving dead letters from other services). With listener retry capped at 3 attempts and exponential backoff, failing poison messages are rejected without infinite redelivery and parked safely in the DLQ for operator inspection. Malformed JSON payloads are directly rejected to the DLQ (`AmqpRejectAndDontRequeueException`).
 
 ---
 
