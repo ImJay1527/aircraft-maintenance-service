@@ -162,7 +162,6 @@ Each replica binds its dedicated queue `aircraft.events.${aircraft.instance-name
 * **Action Taken by `aircraft-maintenance-service`**:
   1. Increments the aircraft's cumulative flight hours (`flightHours += durationHours`).
   2. Transitions aircraft status from `IN_FLIGHT` back to `AVAILABLE`.
-  3. Updates persistent CQRS Mood Projection in DB (`aircraft_mood_views`).
 
 #### Expected JSON Payload:
 ```json

@@ -64,11 +64,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Binding aircraftEventsBinding(Queue aircraftQueue, TopicExchange aisafeExchange) {
-        return BindingBuilder.bind(aircraftQueue).to(aisafeExchange).with("aircraft.#");
-    }
-
-    @Bean
     public MessageConverter jsonMessageConverter() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());

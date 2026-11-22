@@ -111,7 +111,7 @@ With instances running, execute the automated demonstration script to validate a
 ```bash
 ./mvnw clean test
 ```
-*Executes 164 automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, high availability, peer forwarding, CQRS command/query handlers, RabbitMQ messaging & listeners, and the mandatory `/api/v2/unicorns` mood projection.*
+*Executes automated unit and integration tests covering domain invariants, MockMvc controllers, security filters, 3-instance cluster replication, high availability, peer forwarding, CQRS command handlers, and RabbitMQ messaging & listeners.*
 
 ### 3. Newman / Postman Collection
 ```bash
@@ -121,7 +121,7 @@ npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postma
 # HTTPS / TLS 1.3 (verifying trusted CA certificate):
 npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postman/local-https.postman_environment.json --ssl-extra-ca-certs certs/ca.crt
 ```
-*Validates full contract compliance, RBAC security, and the `/api/v2/unicorns` endpoint against active cluster instances.*
+*Validates full contract compliance and RBAC security against active cluster instances.*
 
 ---
 

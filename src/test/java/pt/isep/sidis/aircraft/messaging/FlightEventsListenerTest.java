@@ -3,8 +3,6 @@ package pt.isep.sidis.aircraft.messaging;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import pt.isep.sidis.aircraft.cqrs.projections.AircraftMoodProjection;
-import pt.isep.sidis.aircraft.cqrs.projections.AircraftMoodView;
 import pt.isep.sidis.aircraft.domain.Aircraft;
 import pt.isep.sidis.aircraft.domain.AircraftStatus;
 import pt.isep.sidis.aircraft.messaging.events.FlightCompletedEvent;
@@ -23,11 +21,8 @@ public class FlightEventsListenerTest {
     @Autowired
     private AircraftRepository aircraftRepository;
 
-    @Autowired
-    private AircraftMoodProjection moodProjection;
-
     @Test
-    void shouldAccumulateFlightHoursAndRefreshMoodOnFlightCompletedEvent() {
+    void shouldAccumulateFlightHoursOnFlightCompletedEvent() {
         // Arrange
         String reg = "CS-TPA";
         Aircraft aircraft = aircraftRepository.findByRegistrationNumber(reg).orElseThrow();
@@ -42,11 +37,6 @@ public class FlightEventsListenerTest {
         Aircraft updated = aircraftRepository.findByRegistrationNumber(reg).orElseThrow();
         assertThat(updated.getTotalFlightHours()).isEqualTo(initialHours + 3.5);
         assertThat(updated.getStatus()).isEqualTo(AircraftStatus.AVAILABLE);
-
-        // Assert: CQRS mood projection updated reactively
-        Optional<AircraftMoodView> mood = moodProjection.findByRegistration(reg);
-        assertThat(mood).isPresent();
-        assertThat(mood.get().operationalStatus()).isEqualTo("AVAILABLE");
     }
 
     @Test
@@ -67,30 +57,6 @@ public class FlightEventsListenerTest {
                 listener.onAmqpMessage(msg, "flight.scheduled"));
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
                 listener.onAmqpMessage(msg, "flight.cancelled"));
-    }
-
-    @Test
-    void shouldSynchronizeMoodProjectionWhenAircraftEventArrivesFromBroker() throws Exception {
-        String json = """
-                {
-                    "eventId": "test-broker-event",
-                    "eventType": "AircraftStatusChangedEvent",
-                    "registration": "CS-TPA",
-                    "previousStatus": "AVAILABLE",
-                    "newStatus": "UNDER_MAINTENANCE",
-                    "totalFlightHours": 1500.0
-                }
-                """;
-        org.springframework.amqp.core.Message msg = org.springframework.amqp.core.MessageBuilder
-                .withBody(json.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-                .build();
-
-        listener.onAmqpMessage(msg, "aircraft.status.changed");
-
-        Optional<AircraftMoodView> mood = moodProjection.findByRegistration("CS-TPA");
-        assertThat(mood).isPresent();
-        assertThat(mood.get().operationalStatus()).isEqualTo("UNDER_MAINTENANCE");
-        assertThat(mood.get().mood()).isEqualTo("SLEEPY");
     }
 
     @Test

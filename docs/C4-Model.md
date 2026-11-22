@@ -192,15 +192,12 @@ flowchart TB
             cAircraft["AircraftController<br/>Handles /api/aircrafts/**<br/>Roles: MECHANIC, ADMIN"]:::ctrl
             cTemplate["MaintenanceTemplateController<br/>Handles /api/maintenance-templates/**<br/>Roles: TECHNICIAN, SUPERVISOR"]:::ctrl
             cRecord["MaintenanceRecordController<br/>Handles /api/maintenance-records/**<br/>Roles: TECHNICIAN, SUPERVISOR"]:::ctrl
-            cUnicorns["UnicornsController<br/>Handles /api/v2/unicorns/**<br/>Public CQRS Mood Query"]:::ctrl
         end
 
-        subgraph CQRS_Tier["CQRS (Command & Query Separation)"]
+        subgraph CQRS_Tier["CQRS Command Handlers"]
             direction TB
             hAircraftCmd["AircraftCommandHandler<br/>RegisterAircraftCommand<br/>UpdateAircraftStatusCommand"]:::cqrs
             hMaintCmd["MaintenanceCommandHandler<br/>ScheduleMaintenanceCommand<br/>Start/Complete/CancelMaintenanceCommand"]:::cqrs
-            hAircraftQuery["AircraftQueryHandler<br/>GetAircraftMoodQuery"]:::cqrs
-            projMood["AircraftMoodProjection<br/>In-Memory Reactive Read-Model<br/>ConcurrentMap of AircraftMoodView"]:::cqrs
         end
 
         subgraph Core["Domain Services & Peer Coordination"]
@@ -237,10 +234,6 @@ flowchart TB
     cAircraft --> sAircraft
     cTemplate --> sTemplate
     cRecord --> sRecord
-    cUnicorns --> hAircraftQuery
-
-    hAircraftQuery --> projMood
-    projMood -.->|"Subscribes locally to"| pubEvent
 
     sAircraft --> pubEvent
     sAircraft --> rAircraft
@@ -403,26 +396,17 @@ sequenceDiagram
     participant SVC as AircraftService
     participant DB as Database 1 (Write Model)
     participant PUB as DomainEventPublisher
-    participant PROJ as AircraftMoodProjection (Read Model)
-    participant Client as Frontend / Monitoring Client
 
     Note over FO,RMQ: 1. Flight completes at destination airport
     FO->>RMQ: BasicPublish(exchange="aisafe.events", routingKey="flight.completed", FlightCompletedEvent)
     
     Note over RMQ,LIS: 2. Asynchronous AMQP dispatch to bound queue
-    RMQ->>LIS: Deliver payload to queue "aircraft.events.queue"
+    RMQ->>LIS: Deliver payload to queue "aircraft.events.instance1"
     LIS->>SVC: recordFlightHours("CS-TPA", 3.5, false)
     SVC->>DB: UPDATE aircraft SET flight_hours = flight_hours + 3.5, status = 'AVAILABLE'
     DB-->>SVC: Rows updated (1)
     
-    Note over SVC,PUB: 3. Publish domain event locally and to RabbitMQ
+    Note over SVC,PUB: 3. Publish domain event to RabbitMQ
     SVC->>PUB: publish(AircraftStatusChangedEvent("CS-TPA", "AVAILABLE"))
     PUB-->>RMQ: BasicPublish("aisafe.events", "aircraft.status.changed", event)
-    PUB->>PROJ: ApplicationEventPublisher (In-process reactive dispatch)
-    
-    Note over PROJ: 4. Read-model projection updates in memory:<br/>registration: CS-TPA<br/>mood: HAPPY / REJUVENATED<br/>energyLevel: 85, sparkleFactor: 90
-    
-    Note over Client,PROJ: 5. Public query executes instantaneously with O(1) in-memory lookup
-    Client->>LIS: GET /api/v2/unicorns/CS-TPA
-    LIS-->>Client: 200 OK + AircraftMoodView (Zero DB lock contention)
 ```

@@ -94,7 +94,7 @@ O professor perguntará: *"Qualquer utilizador pode chamar qualquer endpoint? Co
    ```
    *(Mostrar que todos os 163 testes automatizados passam com 0 falhas).*
 
-2. **Mostrar a Coleção do Postman (incluindo o endpoint `/api/v2/unicorns`):**
+2. **Mostrar a Coleção do Postman:**
    ```bash
    npx -y newman run postman/aircraft-maintenance.postman_collection.json -e postman/local.postman_environment.json
    ```
@@ -104,16 +104,16 @@ O professor perguntará: *"Qualquer utilizador pode chamar qualquer endpoint? Co
 
 ---
 
-## 6. Assignment 2: Como funciona o CQRS e como o endpoint `/api/v2/unicorns` se integra no padrão?
+## 6. Assignment 2: Como funciona o CQRS no microsserviço?
 
-O professor perguntará com certeza: *"Como implementaram o CQRS e como é que o endpoint dos unicórnios se integra nisso?"*
+O professor perguntará com certeza: *"Como implementaram o CQRS no vosso serviço?"*
 
 ### A Resposta Fundamental:
-> *"No **Assignment 2**, adotámos o padrão **CQRS (Command-Query Responsibility Segregation)** para segregar as operações de escrita (Commands) das operações de leitura e projeções analíticas (Queries).*
+> *"No **Assignment 2**, adotámos o padrão **CQRS (Command-Query Responsibility Segregation)** para segregar as operações de escrita (Commands) das operações de leitura (Queries).*
 > 
-> *O endpoint `/api/v2/unicorns` é um exemplo puro de uma **Projeção de Leitura (Read Model)** do CQRS: não faz consultas à entidade transacional `Aircraft` nem efetua joins relacionais pesados. Em vez disso, consulta diretamente a `AircraftMoodProjection`, que projeta em tempo real o estado de 'humor' das aeronaves com base nos eventos de domínio (`AircraftStatusChangedEvent`, `MaintenanceCompletedEvent`, etc.).*
+> *No lado da escrita (**Write Side**), os controllers REST não modificam entidades de forma direta nem anémica; emitem Commands explícitos processados por Command Handlers transacionais (`AircraftCommandHandler` e `MaintenanceCommandHandler`), que validam regras de negócio, asseguram controlo de concorrência otimista (`@Version`) e geram Eventos de Domínio (`AircraftCreatedEvent`, `AircraftStatusChangedEvent`, `MaintenanceScheduledEvent`, `MaintenanceCompletedEvent`).*
 > 
-> *Desta forma, garantimos que leituras de monitorização e dashboards nunca bloqueiam transações de escrita e respeitamos a consistência eventual."*
+> *No lado da leitura (**Read Side**), as consultas operacionais são servidas de forma limpa e sem contenção de locks transacionais, garantindo alto desempenho."*
 
 * **Write Side (Commands & Command Handlers):**
   - Os controllers de escrita (`AircraftController` e `MaintenanceRecordController`) invocam **diretamente os Command Handlers**:
@@ -122,11 +122,7 @@ O professor perguntará com certeza: *"Como implementaram o CQRS e como é que o
   - O fluxo de escrita é 100% auditável através do padrão Command, validando regras de negócio e versionamento otimista (`@Version`).
 * **Domain Events & Transactional Outbox:**
   - `AircraftStatusChangedEvent`, `AircraftCreatedEvent`, `MaintenanceScheduledEvent`, `MaintenanceCompletedEvent`.
-  - Os eventos são persistidos na mesma transação atómica na tabela `outbox_events` (Transactional Outbox) e publicados assincronamente para o RabbitMQ e localmente para o read model.
-* **Read Side (Persistent Read Model & Queries):**
-  - `GetAircraftMoodQuery` processada por `AircraftQueryHandler`.
-  - `AircraftMoodProjection` gere a tabela persistente `aircraft_mood_views` (`AircraftMoodEntity`), desacoplada das tabelas de escrita.
-  - Sobrevive a restarts do serviço e mantém estados de humor como `ANTICIPATING` (manutenção agendada) e `REJUVENATED` (manutenção concluída).
+  - Os eventos são persistidos na mesma transação atómica na tabela `outbox_events` (Transactional Outbox) e publicados assincronamente para o RabbitMQ com publisher confirms.
 
 ---
 

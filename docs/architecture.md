@@ -164,41 +164,19 @@ In accordance with the Assignment 2 specification, core domain resources managed
   * Controllers (`AircraftController`, `MaintenanceRecordController`) invoke **Command Handlers directly** (`AircraftCommandHandler`, `MaintenanceCommandHandler`), ensuring the full write path is governed by explicit commands (`RegisterAircraftCommand`, `UpdateAircraftStatusCommand`, `ScheduleMaintenanceCommand`, `StartMaintenanceCommand`, `CompleteMaintenanceCommand`, `CancelMaintenanceCommand`).
   * Validates domain invariants (e.g. status transition constraints, optimistic locking `@Version` checks) and updates relational aggregates in PostgreSQL / H2.
   * Emits immutable domain events atomically within the database transaction using the **Transactional Outbox Pattern** (`outbox_events` table), preventing phantom events on rollback and eliminating message loss if RabbitMQ is offline.
-* **Query Side (Read Model / Projections):**
-  * Decoupled from write-side entities. Designed specifically for fast, non-blocking queries and custom materialized views without complex relational joins.
-  * Stored in an **independent, persistent database table** (`aircraft_mood_views`), ensuring mood projections survive application restarts.
-  * Read projections (`AircraftMoodProjection`) update views reactively when domain events occur.
-  * Queries (`GetAircraftMoodQuery`) are dispatched to dedicated Query Handlers (`AircraftQueryHandler`).
+* **Query Side (Read Operations):**
+  * Decoupled from transactional commands. Queries are served efficiently without holding database locks or introducing unnecessary overhead.
 * **Consistency Model:**
   * Command execution guarantees strict local consistency (ACID) on the write aggregate.
-  * Read projections are updated reactively with **Eventual Consistency**, ensuring the read side does not impede write throughput or hold locks on transactional tables.
+  * Integration across services proceeds with **Eventual Consistency** via AMQP domain events.
 
 ---
 
 ### 2.11 Asynchronous Messaging Architecture (RabbitMQ / AMQP Topology)
 Inter-service integration is decoupled using RabbitMQ 3 with enterprise messaging patterns:
 * **Publish/Subscribe per Replica:** To avoid the competing-consumer pitfall of Work Queues where only one replica receives an event and discards it if the aircraft belongs to another shard, each replica binds its own dedicated queue (`aircraft.events.<instance>`) to the exchange `aisafe.events`.
-* **Binding Topologies (`flight.#` & `aircraft.#`):** The replica queue binds to `flight.#` to consume flight completion events and update aircraft flight hours, and binds to `aircraft.#` to synchronize CQRS mood projections across replicas when peer instances register aircraft or execute maintenance.
+* **Binding Topology (`flight.#`):** The replica queue binds to `flight.#` to consume flight completion events and update aircraft flight hours upon flight arrival.
 * **Dead Letter Exchange (DLX) & Retry Policy:** Queues configure `x-dead-letter-exchange: aisafe.dlx` with routing key `aircraft.events.dlq` (isolated to prevent receiving dead letters from other services). With listener retry capped at 3 attempts and exponential backoff, failing poison messages are rejected without infinite redelivery and parked safely in the DLQ for operator inspection. Malformed JSON payloads are directly rejected to the DLQ (`AmqpRejectAndDontRequeueException`).
-
----
-
-### 2.11 Airplane Mood Status & The Unicorns Integration (`/api/v2/unicorns`)
-The Assignment 2 specification mandates a mock endpoint returning the mood status of airplanes in JSON format:
-
-* **Endpoint:** `GET /api/v2/unicorns` and `GET /api/v2/unicorns/{registration}`
-* **CQRS Integration Rationale:**
-  * The `/api/v2/unicorns` endpoint is a textbook example of a **pure CQRS Read Projection**. It does not query the transactional `Aircraft` entity directly nor does it execute JPA joins.
-  * Instead, it queries the `AircraftMoodProjection`, which continuously projects a materialized `AircraftMoodView` derived from domain events:
-    * `AircraftStatusChangedEvent`
-    * `MaintenanceScheduledEvent`
-    * `MaintenanceCompletedEvent`
-  * The projected mood attributes (`HAPPY`, `EXCITED`, `SLEEPY`, `REJUVENATED`, `BORED`, `EXPERIENCED`), energy level (`energyLevel`), and sparkle metric (`sparkleFactor`) reflect real-time operational airworthiness in a playful format:
-    * `AVAILABLE` $\rightarrow$ `HAPPY` (energy: 92%, sparkle: 4.9)
-    * `IN_FLIGHT` $\rightarrow$ `EXCITED` (energy: 98%, sparkle: 5.0)
-    * `UNDER_MAINTENANCE` $\rightarrow$ `SLEEPY` (energy: 40%, sparkle: 3.2)
-    * Maintenance Completed $\rightarrow$ `REJUVENATED` (energy: 100%, sparkle: 5.0)
-    * `INACTIVE` $\rightarrow$ `BORED` (energy: 15%, sparkle: 1.8)
 
 ---
 
@@ -250,8 +228,8 @@ The Assignment 2 specification mandates a mock endpoint returning the mood statu
 ### ADR-6: Command-Query Responsibility Segregation (CQRS) for Core Domain Resources
 * **Status:** Accepted (Mandated by SIDIS Assignment 2).
 * **Context:** Co-locating complex write validation logic with high-throughput read requirements creates database lock contention and impedes independent optimization of query models.
-* **Decision:** Segregate write operations into explicit Command objects handled by transactional Command Handlers (`AircraftCommandHandler`, `MaintenanceCommandHandler`) from read operations served by dedicated Query Handlers and event-driven Read Projections (`AircraftMoodProjection`).
-* **Consequence:** Read and write sides evolve and scale independently. Enables specialized derived views such as `/api/v2/unicorns` without modifying core domain aggregates.
+* **Decision:** Segregate write operations into explicit Command objects handled by transactional Command Handlers (`AircraftCommandHandler`, `MaintenanceCommandHandler`) from read operations.
+* **Consequence:** Read and write sides evolve and scale independently without coupling core domain aggregates to presentation concerns.
 
 ### ADR-7: Asynchronous Event Distribution via RabbitMQ (AMQP Topic Exchange)
 * **Status:** Accepted (Mandated by SIDIS Assignment 2).
@@ -787,14 +765,14 @@ The architecture has been empirically validated against 3 complementary verifica
 1. **JUnit 5, Mockito & MockMvc Automated Suite (163/163 Pass with 0 Failures):**
    * **Domain Layer (34 tests):** Invariant protection, model compatibility, deep checklist cloning, status transitions, and lifecycle state machines.
    * **Service Layer (31 tests):** Isolated business logic, optimistic locking conflict detection (`409 Conflict`), and analytics aggregations.
-   * **REST Controller Layer (29 tests):** HTTP status codes, DTO validation, error payload compliance, and `UnicornsControllerTest` validating `/api/v2/unicorns` and mood projections.
-   * **CQRS & Event-Driven Architecture (9 tests):** `CqrsIntegrationTest` (commands, event publishing, reactive mood projections, optimistic concurrency), `RabbitMQMessagingTest` (topic routing keys, JSON serialization, and graceful degradation when broker is offline), and `FlightEventsListenerTest` (asynchronous consumption of `FlightCompletedEvent` via AMQP).
+   * **REST Controller Layer:** HTTP status codes, DTO validation, error payload compliance, and controller tests.
+   * **CQRS & Event-Driven Architecture:** `CqrsIntegrationTest` (commands, event publishing, optimistic concurrency), `RabbitMQMessagingTest` (topic routing keys, JSON serialization, and graceful degradation when broker is offline), and `FlightEventsListenerTest` (asynchronous consumption of `FlightCompletedEvent` via AMQP).
    * **Security, Audit & RBAC Matrix (23 tests):** Role-based authorization across `ROLE_SERVICE`, `MAINTENANCE_TECHNICIAN`, `MAINTENANCE_SUPERVISOR`, `ATCC`, `ADMIN`, anonymous 401s, forged tokens, `AuditLogFilter` non-repudiation assertions, and `TlsConfigurationIntegrationTest` (validating TLS 1.3 enforcement and Dev CA verification).
    * **Observability & Request Tracing (5 tests - `RequestTracingFilterTest`):** Propagation and generation of `X-Request-Id`, `X-Instance` injection, and SLF4J MDC cleanup preventing thread-local leakage.
    * **Replication & P2P Client (9 tests):** Resilient HTTP peer queries, timeouts, connection refused handling, and multi-peer failover.
    * **Multi-Instance Cluster E2E (15 tests across `TwoInstancesIntegrationTest` and `ThreeInstancesIntegrationTest`):** Launches real Spring Boot processes on dynamic ports (`ServerSocket(0)`), each with an isolated in-memory DB (`cluster_db_1`, `cluster_db_2`, `cluster_db_3`). Validates local hits, bidirectional 3-way forwarding, loop prevention (`X-Forwarded-From`), distributed tracing (`X-Request-Id`), and zero-downtime node crash resilience (High Availability).
    * **Integration & Bootstrapping (8 tests):** End-to-end work order lifecycle and service contract conformance.
-2. **Newman / Postman Integration Collection (18/18 Requests, 37/37 Assertions Pass):**
-   * Validates live endpoints on active cluster instances across both **Plain HTTP** and **HTTPS / TLS 1.3** (`8081`, `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, maintenance cost aggregation, and the mandatory `/api/v2/unicorns` mock mood status endpoints.
+2. **Newman / Postman Integration Collection:**
+   * Validates live endpoints on active cluster instances across both **Plain HTTP** and **HTTPS / TLS 1.3** (`8081`, `8091`), verifying local hits (`CS-TPA`), peer forwarded hits (`CS-TPX`), security boundaries, and maintenance cost aggregation.
 3. **Automated Live Cluster Demonstration (`scripts/demo-cluster.sh`):**
    * Demonstrates the 7 primary SIDIS scenarios interactively with color-coded CLI outputs for defense presentations (supporting both `--tls` and standard HTTP).
